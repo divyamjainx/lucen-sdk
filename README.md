@@ -21,6 +21,7 @@ All four use the same RobStride actuators, the same motor driver, and the same M
 | Train and validate a wheeled_base policy | [`wheeled_base/README.md`](wheeled_base/README.md) |
 | Operate humanoid_arm or Arm | [`docs/arm_guide.md`](docs/arm_guide.md), then [`humanoid_arm/README.md`](humanoid_arm/README.md) or [`Arm/README.md`](Arm/README.md) |
 | Know what protects you and the robot | [`docs/safety.md`](docs/safety.md) — read before powering anything |
+| Let an AI coding agent work with the SDK for you | [`AGENTS.md`](AGENTS.md) — agents read it automatically; it tells them what they may run on their own and what needs your confirmation |
 | Wire, check or re-flash the MC02 board | [`docs/mc02.md`](docs/mc02.md), [`docs/mc02_protocol.md`](docs/mc02_protocol.md) |
 
 ## Supplied with your robot
