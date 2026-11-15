@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.bak
+MUJOCO_LOG.TXT
+real_logs/
+*.csv
+*.npz
+*.mp4
+.DS_Store

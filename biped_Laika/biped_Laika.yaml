@@ -1,0 +1,273 @@
+# biped_Laika/biped_Laika.yaml - configuration of the biped_Laika robot (12-DoF biped, six joints per leg).
+#
+# Single source of truth: MuJoCo simulation (tools/sim2sim.py), the training export (tools/export_isaac.py) and
+# the real-robot tools (bridge.py, tools/deploy_policy.py, the calibration and motor tools) all load this file.
+# Units: rad, rad/s, N·m, m, s unless noted.
+#
+# Per-unit calibration: the `sign` / `offset` of every joint and `imu.mount_rpy_deg` belong to one physical
+# robot. Re-calibrate them with tools/calib_stance.py after replacing a motor, after re-assembling a joint, or
+# when this file is used on another unit. `mc02.port` must point at this robot's MC02 board: /dev/mc02 when a
+# single board is connected, the board's /dev/serial/by-id/... path when several are.
+#
+# Full guide: biped_Laika/README.md. Safety: docs/safety.md.
+
+# ---- MC02 board: one USB link carries both CAN buses and the IMU (see docs/mc02.md) ----
+# bus_serials: USB serial number expected for each device, checked by tools/check_ports.py.
+# An empty string disables the check.
+bus_serials:
+  /dev/mc02: ""
+mc02:
+  port: /dev/mc02
+  watchdog_ms: 100      # link watchdog (ms): if the host sends nothing for this long (5 control steps), the
+                        # board itself keeps sending damping (kd-only) frames to every motor
+
+# can_timeout: motor-side CAN timeout (RobStride parameter 0x7028, unit 50 µs: 10000 = 500 ms; 0 = off, the
+# factory default). A motor that receives no CAN frame for this long disables itself and the joint goes limp.
+# It is the last safeguard when the MC02 board loses power: the board is powered from the robot computer's USB
+# port, so unplugging USB also stops the board's watchdog, and without this timeout the motors would keep
+# holding their last target. While the board is alive it never triggers (the board's damping frames keep
+# resetting it), so the value means "how long a joint holds its last target after the link is lost for good".
+# Write it to the motors with `python tools/set_can_timeout.py --write --save` (`--check` only compares).
+# tools/deploy_policy.py reads it back from every motor at start-up and refuses to run on a mismatch.
+can_timeout: 10000
+
+# ---- Joint table ----
+# The order of this list is the joint-vector order used everywhere (observations, actions, poses).
+#   name          joint name in the URDF / MJCF model
+#   id            CAN id of the motor
+#   bus           mc02:0 = CAN1 of the MC02 board = left leg, ids 1-6
+#                 mc02:1 = CAN2 of the MC02 board = right leg, ids 7-12
+#   sign, offset  per-unit calibration: joint angle = sign * (motor angle - offset)
+#   motor         motor model; selects the per-model parameters below
+#   range         joint limits [lower, upper] = the URDF limits; joint targets are clamped to this range
+# CAN1 is the connector pair at the top-right corner of the board, CAN2 the pair at the top-left corner; the
+# two connectors of a pair are the same bus. Only the CAN L / H signal pins of each leg chain go to the board;
+# 48 V motor power does not pass through it.
+joints:
+  - {name: l_hip_pitch_joint,   id: 1,  bus: mc02:0,         sign: -1, offset: +0.01637,   motor: RS06, range: [-1.309, 1.309]}
+  - {name: l_hip_roll_joint,    id: 2,  bus: mc02:0,         sign: -1, offset: -0.00901,   motor: RS02, range: [-0.349066, 1.22173]}
+  - {name: l_hip_yaw_joint,     id: 3,  bus: mc02:0,         sign: -1, offset: +0.01613,   motor: RS00, range: [-1.0472, 1.0472]}
+  - {name: l_knee_joint,        id: 4,  bus: mc02:0,         sign: -1, offset: -0.00190,  motor: RS06, range: [-2.0944, 0.0]}
+  - {name: l_ankle_pitch_joint, id: 5,  bus: mc02:0,         sign: -1, offset: +0.01496,  motor: RS02, range: [-0.698132, 0.698132]}
+  - {name: l_ankle_roll_joint,  id: 6,  bus: mc02:0,         sign: -1, offset: -0.02897,   motor: RS00, range: [-0.610865, 0.610865]}
+  - {name: r_hip_pitch_joint,   id: 7,  bus: mc02:1,         sign: -1, offset: -0.02051,   motor: RS06, range: [-1.309, 1.309]}
+  - {name: r_hip_roll_joint,    id: 8,  bus: mc02:1,         sign: -1, offset: +0.06448,   motor: RS02, range: [-1.22173, 0.349066]}
+  - {name: r_hip_yaw_joint,     id: 9,  bus: mc02:1,         sign: -1, offset: -0.05397,   motor: RS00, range: [-1.0472, 1.0472]}
+  - {name: r_knee_joint,        id: 10, bus: mc02:1,         sign: -1, offset: -0.00003,  motor: RS06, range: [0.0, 2.0944]}
+  - {name: r_ankle_pitch_joint, id: 11, bus: mc02:1,         sign: -1, offset: +0.02077,   motor: RS02, range: [-0.698132, 0.698132]}
+  - {name: r_ankle_roll_joint,  id: 12, bus: mc02:1,         sign: -1, offset: -0.03597,   motor: RS00, range: [-0.610865, 0.610865]}
+
+# ---- Per-model motor parameters ----
+# tau_max: rated peak torque of each motor model (N·m). A physical property of the motor: do not edit.
+tau_max: {RS06: 36.0, RS02: 17.0, RS00: 14.0}
+
+# tau_limit: the torque limit actually deployed (N·m). It is written into the motor firmware (limit_torque)
+# and is also the torque clip in simulation. The two must be equal, otherwise a policy is trained on a
+# different robot than the one it runs on. It must not exceed tau_max.
+# After changing it, write it to the motors with `python tools/set_torque.py --write --save` (`--check` only
+# compares). tools/deploy_policy.py reads the limit back from every motor at start-up and refuses to run on
+# a mismatch. The limits are part of the plant recorded in each policy's manifest: the shipped policies were
+# trained with these values.
+# The values follow the measured torque demand with margin, capped at the rated peak (walking already uses
+# almost all of the RS02's rated torque). This limits how hard a joint can push; it does not reduce
+# touchdown force, which is set by the momentum of the falling mass.
+tau_limit: {RS06: 18.0, RS02: 17.0, RS00: 11.0}
+
+# vel_limit: joint speed limit (rad/s) = the speed limit set in the motor firmware (limit_spd). Simulation and
+# training must not exceed what the motor can do. If the firmware limit is raised, update this value and
+# retrain the policies.
+vel_limit: {RS06: 10.0, RS02: 20.0, RS00: 33.0}
+
+# armature: rotor inertia reflected through the gearbox (kg·m², gear ratio² x rotor inertia), identified on
+# the bench with the motor mechanically uncoupled; accuracy about ±10 %. A property of the motor model.
+# For the ankle motors (RS02 / RS00) it is of the same order as the inertia of the foot link itself, so a
+# simulation model must include it. tools/export_isaac.py exports it for training, and the MuJoCo model
+# (biped_Laika/biped_Laika.xml) carries the same values as joint armature.
+armature: {RS06: 0.0070, RS02: 0.0032, RS00: 0.0015}
+
+# joint_friction: Coulomb friction torque per motor model (N·m). joint_damping: viscous coefficient
+# (N·m·s/rad), the same for all three models. Both were identified on the robot. The spread between individual
+# motors (about 2x) is far larger than the effect of temperature (about 5 %), which is why training
+# randomises friction (domain_rand.joint_friction_add).
+# In MuJoCo these are <joint frictionloss=... damping=...>. In Isaac Lab (ImplicitActuatorCfg) set both
+# friction and dynamic_friction to the Coulomb value (with only the static one a moving joint loses nothing)
+# and viscous_friction to joint_damping; the values are torques in N·m.
+joint_friction: {RS06: 0.15, RS02: 0.12, RS00: 0.13}    # Coulomb friction torque (N·m)
+joint_damping: 0.02                                      # viscous coefficient (N·m·s/rad), all models
+
+# ---- PD gains ----
+# gain_profiles: named sets of [kp, kd] per motor model (kp in N·m/rad, kd in N·m·s/rad). The same PD law
+# runs in the motor firmware and in simulation:
+#     tau = clip(kp * (q_des - q) - kd * qd, ±tau_limit)
+#   rl_default  the gains policies are trained and run with (tools/sim2sim.py, tools/deploy_policy.py).
+#               They are part of the plant a policy was trained on: changing them means retraining.
+#   mirror      softer gains, the default of bridge.py (viewer and slider teleoperation).
+# kp / kd cannot be compared between robots as raw numbers; compare the natural frequency sqrt(kp / J) and
+# the damping ratio kd / (2 * sqrt(kp * J)) for the joint inertia J (knee: about 3 Hz, ratio about 0.5).
+# With these torque limits a much higher kp would saturate the torque clip at small position errors.
+gain_profiles:
+  mirror:     {RS06: [25.0, 1.5], RS02: [15.0, 0.8], RS00: [12.0, 0.6]}
+  rl_default: {RS06: [30.0, 1.5], RS02: [20.0, 1.0], RS00: [12.0, 0.6]}
+
+# standing_pose: the default nominal pose = the zero pose of the URDF: both legs straight, feet flat on the
+# ground, torso upright. Joint zero offsets are calibrated in this pose (tools/calib_stance.py) and the
+# standing policy uses it as its nominal pose. Policy profiles replace it with their own nominal_pose.
+standing_pose:
+  l_hip_pitch_joint:    0.0
+  l_hip_roll_joint:     0.0
+  l_hip_yaw_joint:      0.0
+  l_knee_joint:         0.0
+  l_ankle_pitch_joint:  0.0
+  l_ankle_roll_joint:   0.0
+  r_hip_pitch_joint:    0.0
+  r_hip_roll_joint:     0.0
+  r_hip_yaw_joint:      0.0
+  r_knee_joint:         0.0
+  r_ankle_pitch_joint:  0.0
+  r_ankle_roll_joint:   0.0
+
+# ---- IMU ----
+# BMI088 on the MC02 board, which is mounted at the centre of the torso. Raw samples arrive over the same USB
+# link as the two CAN buses; attitude fusion and the mounting correction run on the robot computer
+# (tools/imu_reader.py).
+imu:
+  source: dm_mc02_can_v1              # binary sample stream of the MC02 firmware
+  # port: the same device as mc02.port. Use a fixed device name, never /dev/ttyACM* (its number can change).
+  port: /dev/mc02
+  rate_hz: 500                        # sample rate requested from the board (Hz)
+  frame: "mc02_imu_t (v0: I,seq,gx,gy,gz,ax,ay,az)"    # note only; not read by the code
+  # state_file: written by the optional stand-alone fusion process (`python tools/imu_reader.py --daemon`).
+  # If the file exists and is fresh, tools attach to it instead of opening the port; otherwise they run the
+  # fusion in-process, which is the normal mode with the MC02 link (one process owns the USB port).
+  state_file: /dev/shm/lucen_imu_state
+  mount_axes: {x: "+x", y: "+y", z: "+z"}  # board axis pointing along the torso's forward (x) / left (y) / up (z)
+  # mount_rpy_deg: fine mounting correction [roll, pitch, yaw] in degrees. Per-unit calibration, measured with
+  # the robot standing level: tools/calib_stance.py, or `python tools/imu_reader.py --calib-level`.
+  # Yaw cannot be observed from gravity and stays 0.
+  mount_rpy_deg: [0.49, 0.17, 0.0]
+  # mount_pos_m: position of the IMU in the base frame (m). For reference only: the lever arm is not
+  # compensated (it affects neither the gyro nor the static gravity direction).
+  mount_pos_m: [0.0, 0.0, 0.060]
+
+# ---- Policy I/O contract ----
+# The definition of observations and actions shared by training, MuJoCo simulation and the real robot; all
+# three must agree exactly (implementation: tools/policy_io.py). Joint vectors use the order of `joints`.
+# A policy needs the torso IMU (angular velocity and projected gravity).
+# `policy` together with `standing_pose` is the default contract: a 45-dim observation, used by the standing
+# policy biped_Laika/policies/stand.onnx.
+policy:
+  control_rate_hz: 50            # policy rate (Hz); the PD loop runs in the motor firmware / in each physics sub-step
+  action_scale: 0.25             # target = nominal + action_scale * clip(action, ±action_clip), clamped to range
+  action_clip: 1.0
+  obs:                           # concatenated in this order; scale multiplies the raw quantity
+    - {name: base_ang_vel,      dim: 3,  scale: 0.25}               # torso angular velocity in the base frame (rad/s)
+    - {name: projected_gravity, dim: 3,  scale: 1.0}                # unit gravity vector in the base frame
+    - {name: commands,          dim: 3,  scale: [2.0, 2.0, 0.25]}   # velocity command: vx, vy (m/s), yaw rate (rad/s)
+    - {name: joint_pos_rel,     dim: 12, scale: 1.0}                # q - nominal pose (rad)
+    - {name: joint_vel,         dim: 12, scale: 0.05}               # rad/s
+    - {name: last_action,       dim: 12, scale: 1.0}                # previous network output (not scaled)
+
+# ---- Policy profiles ----
+# A profile overrides parts of the default contract for one family of policies: nominal_pose, action_scale,
+# cycle_time_s, plus extra observation terms (obs_extra) appended after the 45 base dimensions. The base 45
+# dimensions never change. One ONNX file belongs to exactly one profile: the profile and the whole contract
+# are stamped into the ONNX manifest, and tools/sim2sim.py and tools/deploy_policy.py refuse a policy whose
+# manifest disagrees with this file. --policy-profile is needed only for an ONNX without a manifest.
+#
+#   walk      47-dim: base + gait phase; 0.40 s gait clock.
+#   omni      215-dim: base + gait phase + a history block of the previous 4 frames; 0.50 s gait clock.
+#   omni_ff   omni plus a lateral feed-forward term (lat_ff_gain). Used by the reference walking policy
+#             biped_Laika/policies/walk.onnx.
+#
+# All three use the same nominal pose, a shallow crouch (hip 0.15 / knee 0.3 / ankle 0.15 rad) that is
+# left-right symmetric and keeps the feet flat (hip - knee + ankle = 0); a straight-leg stance would sit on
+# the knee limit and leave the stance leg no room to extend. action_scale 0.5 gives the swing leg its travel.
+#   gait_phase  open-loop clock: phase = (t / cycle_time_s) mod 1, with t = 0 when the policy is enabled.
+#   frame_hist  the previous 4 frames [t-1 .. t-4], newest first. One frame = the base terms without commands
+#               (3 + 3 + 12 + 12 + 12 = 42 dims), already multiplied by their scales, hence scale 1.0 here.
+#               On the first step after the policy is enabled all four slots hold the current frame.
+#
+# To add a profile for your own policy: copy `walk`, change nominal_pose / action_scale / cycle_time_s as
+# needed, and keep obs_extra entries at the tail. Then regenerate the training values and verify the contract:
+#     python tools/export_isaac.py
+#     python tools/contract_check.py --onehot
+policy_profiles:
+  walk:
+    action_scale: 0.5              # joint targets can move ±0.5 rad around nominal_pose
+    init_base_height: 0.3804       # base height above the ground in nominal_pose, feet flat (m)
+    cycle_time_s: 0.40             # period of the gait clock (s)
+    obs_extra:
+      - {name: gait_phase, dim: 2, scale: 1.0}   # [cos(2πφ), sin(2πφ)], φ = gait phase in [0, 1)
+    nominal_pose:
+      l_hip_pitch_joint:   -0.15
+      l_hip_roll_joint:     0.0
+      l_hip_yaw_joint:      0.0
+      l_knee_joint:        -0.3
+      l_ankle_pitch_joint: -0.15
+      l_ankle_roll_joint:   0.0
+      r_hip_pitch_joint:    0.15
+      r_hip_roll_joint:     0.0
+      r_hip_yaw_joint:      0.0
+      r_knee_joint:         0.3
+      r_ankle_pitch_joint:  0.15
+      r_ankle_roll_joint:   0.0
+
+  omni_ff:
+    action_scale: 0.5
+    init_base_height: 0.3804       # same nominal pose as walk
+    cycle_time_s: 0.50             # period of the gait clock (s)
+    obs_extra:
+      - {name: gait_phase, dim: 2, scale: 1.0}   # [cos(2πφ), sin(2πφ)], φ = gait phase in [0, 1)
+      - {name: frame_hist, dim: 168, scale: 1.0} # 4 frames x 42 dims, see above
+    nominal_pose:
+      l_hip_pitch_joint:   -0.15
+      l_hip_roll_joint:     0.0
+      l_hip_yaw_joint:      0.0
+      l_knee_joint:        -0.3
+      l_ankle_pitch_joint: -0.15
+      l_ankle_roll_joint:   0.0
+      r_hip_pitch_joint:    0.15
+      r_hip_roll_joint:     0.0
+      r_hip_yaw_joint:      0.0
+      r_knee_joint:         0.3
+      r_ankle_pitch_joint:  0.15
+      r_ankle_roll_joint:   0.0
+
+    # lat_ff_gain: gain of the lateral feed-forward term, part of the action contract:
+    #     target = nominal + action_scale * a + lat_ff(vy command, gait phase)
+    # lat_ff is a phase-locked triangle wave added to the hip-roll targets, with the opposite sign on the
+    # ankle-roll targets. Its amplitude is proportional to the lateral velocity command; it is zero when that
+    # command is zero. The policy action is a residual on top of it and keeps full authority over balance.
+    # A policy trained with the term must run with it; `omni` is the same contract without it.
+    lat_ff_gain: -0.5
+
+  omni:
+    action_scale: 0.5
+    init_base_height: 0.3804       # same nominal pose as walk
+    cycle_time_s: 0.50             # period of the gait clock (s)
+    obs_extra:
+      - {name: gait_phase, dim: 2, scale: 1.0}   # [cos(2πφ), sin(2πφ)], φ = gait phase in [0, 1)
+      - {name: frame_hist, dim: 168, scale: 1.0} # 4 frames x 42 dims, see above
+    nominal_pose:
+      l_hip_pitch_joint:   -0.15
+      l_hip_roll_joint:     0.0
+      l_hip_yaw_joint:      0.0
+      l_knee_joint:        -0.3
+      l_ankle_pitch_joint: -0.15
+      l_ankle_roll_joint:   0.0
+      r_hip_pitch_joint:    0.15
+      r_hip_roll_joint:     0.0
+      r_hip_yaw_joint:      0.0
+      r_knee_joint:         0.3
+      r_ankle_pitch_joint:  0.15
+      r_ankle_roll_joint:   0.0
+
+# ---- Domain randomisation ----
+# The ranges the reference policies were trained with (uniform sampling). For reference when training;
+# tools/export_isaac.py exports them.
+domain_rand:
+  kp_scale: [0.8, 1.2]                       # multiplies kp
+  kd_scale: [0.7, 1.3]                       # multiplies kd
+  joint_friction_add: [-0.05, 0.10]          # added to joint_friction (N·m); covers the measured spread between motors
+  action_latency_s: [0.0, 0.06]              # action delay (s): 0-3 control steps (the real control chain shows 1-2)
+  base_com_offset_m: [0.020, 0.020, 0.020]   # offset of the base centre of mass, ± per axis x / y / z (m)

@@ -1,0 +1,8 @@
+# Required to run the SDK (Python 3.10 or newer)
+numpy
+pyyaml
+pyserial        # MC02 USB serial link
+python-can      # CAN frame types used by the motor driver
+onnx            # stamp / read ONNX manifests
+onnxruntime     # run policies
+mujoco          # simulation, arm gravity feed-forward, simulated bridge

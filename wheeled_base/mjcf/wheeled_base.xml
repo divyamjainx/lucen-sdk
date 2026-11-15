@@ -1,0 +1,123 @@
+<!-- wheeled_base MuJoCo model. Units: m, kg, rad. X forward, Y left, Z up. Link masses are measured; centres of mass and inertias are computed from the link geometry assuming uniform density. Both wheel joints are positive forward. -->
+<mujoco model="wheeled_base">
+  <compiler angle="radian" meshdir="../meshes" autolimits="true" balanceinertia="true" inertiafromgeom="false"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <default>
+    <joint damping="0.5" armature="0.01" frictionloss="0.05"/>
+    <default class="visual"><geom type="mesh" contype="0" conaffinity="0" group="2" rgba="0.30 0.30 0.32 1"/></default>
+    <default class="collision"><geom type="mesh" group="3" rgba="0.8 0.3 0.3 0.4"/></default>
+    <default class="wheel"><joint damping="0.05" armature="0.005" frictionloss="0.01"/><geom type="cylinder" group="3" friction="1.2 0.01 0.001" rgba="0.1 0.1 0.1 0.4"/></default>
+  </default>
+  <asset>
+    <mesh name="base_link" file="base_link.stl"/>
+    <mesh name="l_hip_pitch_link" file="l_hip_pitch_link.stl"/>
+    <mesh name="l_hip_roll_link" file="l_hip_roll_link.stl"/>
+    <mesh name="l_hip_yaw_link" file="l_hip_yaw_link.stl"/>
+    <mesh name="l_knee_link" file="l_knee_link.stl"/>
+    <mesh name="l_wheel_link" file="l_wheel_link.stl"/>
+    <mesh name="r_hip_pitch_link" file="r_hip_pitch_link.stl"/>
+    <mesh name="r_hip_roll_link" file="r_hip_roll_link.stl"/>
+    <mesh name="r_hip_yaw_link" file="r_hip_yaw_link.stl"/>
+    <mesh name="r_knee_link" file="r_knee_link.stl"/>
+    <mesh name="r_wheel_link" file="r_wheel_link.stl"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 .15 .2" width="512" height="512"/>
+    <material name="grid" texture="grid" texrepeat="8 8" reflectance=".1"/>
+  </asset>
+  <worldbody>
+    <light pos="1 0 2" dir="-0.5 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="5 5 0.05" material="grid"/>
+    <body name="base_link" pos="0 0 0.42602">
+      <freejoint name="floating_base"/>
+      <inertial pos="-3.340937e-06 4.382044e-06 0.06033196672" mass="3.4" fullinertia="0.02376990058 0.0264540363 0.01230035642 -5.40617e-07 -8.5821e-08 1.17175e-07"/>
+      <geom class="visual" mesh="base_link"/>
+      <geom class="collision" mesh="base_link" name="base_link_col"/>
+      <body name="l_hip_pitch_link" pos="0 0.05074 0">
+        <inertial pos="0.001171727972 0.05717831507 -7.878834e-06" mass="0.907" fullinertia="0.001008160693 0.000678051682 0.000874556307 -6.536528e-06 -7.508e-09 -3.31661e-07"/>
+        <joint name="l_hip_pitch_joint" type="hinge" axis="0 1 0" range="-1.308997 1.308997" actuatorfrcrange="-36 36"/>
+        <geom class="visual" mesh="l_hip_pitch_link"/>
+        <geom class="collision" mesh="l_hip_pitch_link" name="l_hip_pitch_link_col"/>
+        <body name="l_hip_roll_link" pos="0.02859 0.06201 0">
+          <inertial pos="-0.02897229124 -5.11276e-07 -0.06563955443" mass="0.493" fullinertia="0.00061356616 0.000750591005 0.000318529903 3.441e-09 1.2336055e-05 -2.0057e-08"/>
+          <joint name="l_hip_roll_joint" type="hinge" axis="-1 0 0" range="-1.22173 0.349066" actuatorfrcrange="-36 36"/>
+          <geom class="visual" mesh="l_hip_roll_link"/>
+          <geom class="collision" mesh="l_hip_roll_link" name="l_hip_roll_link_col"/>
+          <body name="l_hip_yaw_link" pos="-0.02859 0 -0.10916">
+            <inertial pos="2.224013e-06 -0.001704480951 -0.03483679166" mass="0.188" fullinertia="0.00031710071 0.000150621818 0.000218238153 -1.5384e-08 -2.458e-09 -3.251714e-06"/>
+            <joint name="l_hip_yaw_joint" type="hinge" axis="0 0 1" range="-1.047198 1.047198" actuatorfrcrange="-14 14"/>
+            <geom class="visual" mesh="l_hip_yaw_link"/>
+            <geom class="collision" mesh="l_hip_yaw_link" name="l_hip_yaw_link_col"/>
+            <body name="l_knee_link" pos="0 0.02859 -0.06084">
+              <inertial pos="-8.2202884e-05 -0.0272891405 -0.07520524843" mass="1.586" fullinertia="0.01141531574 0.0116485081 0.001100259008 1.197261e-06 9.84639e-06 1.9008531e-05"/>
+              <joint name="l_knee_joint" type="hinge" axis="0 1 0" range="0 2.094395" actuatorfrcrange="-36 36"/>
+              <geom class="visual" mesh="l_knee_link"/>
+              <geom class="collision" mesh="l_knee_link" name="l_knee_link_col"/>
+              <body name="l_wheel_link" pos="0 -0.00129 -0.17">
+                <inertial pos="2.136e-07 0.007425686463 -3.021e-09" mass="0.326" fullinertia="0.00085677991 0.001675328772 0.000856790554 -2.6e-11 1.9e-11 0"/>
+                <joint name="l_wheel_joint" type="hinge" axis="0 1 0" class="wheel" actuatorfrcrange="-17 17"/>
+                <geom class="visual" mesh="l_wheel_link" rgba="0.08 0.08 0.08 1"/>
+                <geom class="wheel" name="l_wheel_link_col" size="0.085" fromto="0 -0.0065 0 0 0.0215 0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="r_hip_pitch_link" pos="0 -0.05074 0">
+        <inertial pos="0.001171770414 -0.05688369365 -7.878807e-06" mass="0.907" fullinertia="0.001005499703 0.000678051593 0.000871895226 4.046597e-06 -7.001e-09 3.27245e-07"/>
+        <joint name="r_hip_pitch_joint" type="hinge" axis="0 1 0" range="-1.308997 1.308997" actuatorfrcrange="-36 36"/>
+        <geom class="visual" mesh="r_hip_pitch_link"/>
+        <geom class="collision" mesh="r_hip_pitch_link" name="r_hip_pitch_link_col"/>
+        <body name="r_hip_roll_link" pos="0.02859 -0.06201 0">
+          <inertial pos="-0.02897229124 -5.11276e-07 -0.06563955446" mass="0.493" fullinertia="0.00061356616 0.000750591005 0.000318529903 3.441e-09 1.2336055e-05 -2.0057e-08"/>
+          <joint name="r_hip_roll_joint" type="hinge" axis="-1 0 0" range="-0.349066 1.22173" actuatorfrcrange="-36 36"/>
+          <geom class="visual" mesh="r_hip_roll_link"/>
+          <geom class="collision" mesh="r_hip_roll_link" name="r_hip_roll_link_col"/>
+          <body name="r_hip_yaw_link" pos="-0.02859 0 -0.10916">
+            <inertial pos="2.223994e-06 -0.000740055632 -0.03483679166" mass="0.188" fullinertia="0.000317543934 0.000150621818 0.000218681377 -1.4981e-08 -2.458e-09 -8.652456e-06"/>
+            <joint name="r_hip_yaw_joint" type="hinge" axis="0 0 1" range="-1.047198 1.047198" actuatorfrcrange="-14 14"/>
+            <geom class="visual" mesh="r_hip_yaw_link"/>
+            <geom class="collision" mesh="r_hip_yaw_link" name="r_hip_yaw_link_col"/>
+            <body name="r_knee_link" pos="0 0.02859 -0.06084">
+              <inertial pos="-8.2636475e-05 -0.0285796872 -0.07520524819" mass="1.586" fullinertia="0.01141799945 0.01164850797 0.00110294261 1.365507e-06 9.817062e-06 -0.000175397053"/>
+              <joint name="r_knee_joint" type="hinge" axis="0 1 0" range="0 2.094395" actuatorfrcrange="-36 36"/>
+              <geom class="visual" mesh="r_knee_link"/>
+              <geom class="collision" mesh="r_knee_link" name="r_knee_link_col"/>
+              <body name="r_wheel_link" pos="0 -0.05589 -0.17">
+                <inertial pos="-2.136e-07 -0.007425686463 -3.021e-09" mass="0.326" fullinertia="0.00085677991 0.001675328772 0.000856790554 -2.6e-11 -1.9e-11 0"/>
+                <joint name="r_wheel_joint" type="hinge" axis="0 1 0" class="wheel" actuatorfrcrange="-17 17"/>
+                <geom class="visual" mesh="r_wheel_link" rgba="0.08 0.08 0.08 1"/>
+                <geom class="wheel" name="r_wheel_link_col" size="0.085" fromto="0 -0.0215 0 0 0.0065 0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <contact>
+    <exclude body1="base_link" body2="l_hip_roll_link"/>
+    <exclude body1="base_link" body2="r_hip_roll_link"/>
+    <exclude body1="l_hip_pitch_link" body2="l_hip_yaw_link"/>
+    <exclude body1="l_hip_pitch_link" body2="r_hip_pitch_link"/>
+    <exclude body1="l_hip_roll_link" body2="l_knee_link"/>
+    <exclude body1="l_hip_yaw_link" body2="l_wheel_link"/>
+    <exclude body1="r_hip_pitch_link" body2="r_hip_yaw_link"/>
+    <exclude body1="r_hip_roll_link" body2="r_knee_link"/>
+    <exclude body1="r_hip_yaw_link" body2="r_wheel_link"/>
+  </contact>
+  <actuator>
+    <position name="l_hip_pitch" joint="l_hip_pitch_joint" kp="80" kv="2" ctrlrange="-1.308997 1.308997" forcerange="-36 36"/>
+    <position name="l_hip_roll" joint="l_hip_roll_joint" kp="80" kv="2" ctrlrange="-1.22173 0.349066" forcerange="-36 36"/>
+    <position name="l_hip_yaw" joint="l_hip_yaw_joint" kp="40" kv="2" ctrlrange="-1.047198 1.047198" forcerange="-14 14"/>
+    <position name="l_knee" joint="l_knee_joint" kp="80" kv="2" ctrlrange="0 2.094395" forcerange="-36 36"/>
+    <velocity name="l_wheel" joint="l_wheel_joint" kv="2" ctrlrange="-43 43" forcerange="-17 17"/>
+    <position name="r_hip_pitch" joint="r_hip_pitch_joint" kp="80" kv="2" ctrlrange="-1.308997 1.308997" forcerange="-36 36"/>
+    <position name="r_hip_roll" joint="r_hip_roll_joint" kp="80" kv="2" ctrlrange="-0.349066 1.22173" forcerange="-36 36"/>
+    <position name="r_hip_yaw" joint="r_hip_yaw_joint" kp="40" kv="2" ctrlrange="-1.047198 1.047198" forcerange="-14 14"/>
+    <position name="r_knee" joint="r_knee_joint" kp="80" kv="2" ctrlrange="0 2.094395" forcerange="-36 36"/>
+    <velocity name="r_wheel" joint="r_wheel_joint" kv="2" ctrlrange="-43 43" forcerange="-17 17"/>
+  </actuator>
+  <keyframe>
+    <key name="straight" qpos="0 0 0.42600 1 0 0 0 0 0 0 0 0 0 0 0 0 0" ctrl="0 0 0 0 0 0 0 0 0 0"/>
+    <key name="bent_knee" qpos="0 0 0.38437 1 0 0 0 -0.499164 0 0 1.000074 0 -0.499164 0 0 1.000074 0" ctrl="-0.499164 0 0 1.000074 0 -0.499164 0 0 1.000074 0"/>
+  </keyframe>
+</mujoco>

@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lucen VR teleoperation</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 20px 16px 40px; background: #14161a; color: #e6e8ec; font: 16px/1.55 -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 26px 0 8px; color: #aab2c0; font-weight: 600; }
+  p, li { color: #c4cad4; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+  button { font: inherit; padding: 12px 18px; border-radius: 10px; border: 1px solid #3a404b; background: #232730; color: #e6e8ec; cursor: pointer; }
+  button.primary { background: #2f6fed; border-color: #2f6fed; color: #fff; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.held { background: #1f8a4c; border-color: #1f8a4c; }
+  #status { padding: 10px 14px; border-radius: 10px; background: #1c1f26; border: 1px solid #2c313a; font-variant-numeric: tabular-nums; }
+  #status b { color: #fff; }
+  .ok { color: #5fd38d; } .warn { color: #f0b34a; } .bad { color: #f06a6a; }
+  kbd { padding: 1px 6px; border-radius: 5px; border: 1px solid #454b57; background: #262a33; font: 13px ui-monospace, Menlo, monospace; }
+  label { color: #c4cad4; }
+  input[type=range] { width: 220px; vertical-align: middle; }
+  .sim { padding: 12px 14px; border-radius: 10px; border: 1px dashed #3a404b; }
+  .dim { color: #8a93a3; font-size: 14px; }
+  table { border-collapse: collapse; margin: 6px 0; }
+  td { padding: 3px 14px 3px 0; color: #c4cad4; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lucen VR teleoperation</h1>
+  <div id="status">Connecting to the teleop server...</div>
+  <div id="tokbox" class="row" style="display:none">
+    <label>Access token (the 8 characters after ?k= at the end of the address printed in the terminal of the teleop server)<br><input id="tok" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" maxlength="32" style="font:inherit;padding:10px;border-radius:8px;border:1px solid #3a404b;background:#1c1f26;color:#e6e8ec;width:200px"></label>
+    <button id="tokGo" style="align-self:flex-end">Use this token</button>
+  </div>
+
+  <div class="row">
+    <button id="btnAR" class="primary" disabled>Enter AR (passthrough: you can see the robot)</button>
+    <button id="btnVR" disabled>Enter VR (you cannot see the robot: for debugging only)</button>
+  </div>
+  <div class="row">
+    <button id="btnReady">Both arms to ready</button>
+    <button id="btnHome">Both arms to home</button>
+  </div>
+  <p id="xrmsg" class="dim"></p>
+
+  <h2>Controllers</h2>
+  <table>
+    <tr><td><b>Grip</b> (middle finger)</td><td>Hold = this controller takes over its arm; release = that arm stops in place</td></tr>
+    <tr><td><b>Trigger</b> (index finger)</td><td>Drives the gripper while the grip is held: fully pressed = closed, released = open</td></tr>
+  </table>
+  <div id="handsHelp" style="display:none">
+  <h2>Bare hands (hand tracking)</h2>
+  <table>
+    <tr><td><b>Fist</b></td><td>Curl the middle, ring and little finger into the palm and hold for a quarter of a second = take over; open these three fingers = that arm stops in place. The arm follows your wrist</td></tr>
+    <tr><td><b>Thumb + index finger</b></td><td>Drive the gripper while the fist is held: fingertips together = closed, 8 cm apart or more = fully open, proportional in between</td></tr>
+  </table>
+  <p class="dim">Enable hand tracking in the headset settings and put the controllers down; the headset switches to hands by itself (a controller on one side and a bare hand on the other is fine). Keep your hands where the headset can see them (in front of you): a hand that leaves the view is released automatically. Do not pinch thumb and index finger with the palm facing your face: that is the headset's system gesture (the left hand exits, the right hand opens the system menu). Bare hands get no vibration; a tone marks take-over, release and a blocked move.</p>
+  </div>
+  <h2>Cube colours</h2>
+  <p>Cube on the controller / wrist: grey = idle · green = engaged · red = would collide, holding · orange = tracking lost, release the grip (open the hand) and try again · blue = moving to a preset pose · purple = teleop server not responding. With bare hands every finger joint also gets a small cube (to judge how well the hand is tracked); the thumb and index fingertips turn white while the gripper follows the pinch.</p>
+  <p class="dim">Before entering, stand in the stance selected when the teleop server was started and look straight ahead (directions are fixed by the heading of the headset at the moment you enter); if they are off, long-press the Meta button to recenter. Out of reach? Release the grip (open the hand), bring your hand back and grip again (make a fist again).</p>
+
+  <h2>No headset: simulated controller</h2>
+  <div class="sim">
+    <div class="row" style="margin-top:0">
+      <label><input type="checkbox" id="simOn"> Enable the simulated controller</label>
+      <label><input type="radio" name="simHand" value="right" checked> Right controller</label>
+      <label><input type="radio" name="simHand" value="left"> Left controller</label>
+      <label id="simAsHandBox" style="display:none"><input type="checkbox" id="simAsHand"> Send in hand-tracking format (grip = fist, trigger = pinch)</label>
+    </div>
+    <div class="row">
+      <button id="simGrip">Grip (hold this button, or hold the space bar)</button>
+      <label>Trigger <input type="range" id="simTrig" min="0" max="1" step="0.01" value="0"></label>
+    </div>
+    <p class="dim">While the grip is held: <kbd>W</kbd>/<kbd>S</kbd> forward / back · <kbd>A</kbd>/<kbd>D</kbd> left / right · <kbd>E</kbd>/<kbd>Q</kbd> up / down (1 cm per press) · <kbd>Z</kbd>/<kbd>C</kbd> turn 5° about the vertical axis</p>
+    <p class="dim" id="simPos"></p>
+  </div>
+</main>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+let state = null, lastOk = 0, busy = false, lastSend = 0, session = null, authBad = false;
+const TOKEN = new URLSearchParams(location.search).get('k') || '';   // access token from the address bar; sent with every pose / button / state request
+
+// ---------- talking to the teleop server ----------
+function api(path, obj) {
+  const opt = {headers: {'X-Lucen-Token': TOKEN}};
+  if (obj !== undefined) { opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(obj); }
+  return fetch(path, opt).then(r => { authBad = r.status === 403; if (!r.ok) throw new Error('http ' + r.status); return r.json(); });
+}
+function post(path, obj) { return api(path, obj); }
+$('#tokGo').onclick = () => { const v = $('#tok').value.trim().toLowerCase(); if (v) location.search = '?k=' + encodeURIComponent(v); };
+function sendPose(ctl) {
+  const now = performance.now();
+  if (busy || now - lastSend < 14) return;            // the previous request is still pending: drop this frame, do not queue
+  busy = true; lastSend = now;
+  post('/pose', {ctl}).then(s => { state = s; lastOk = performance.now(); }).catch(() => {}).finally(() => { busy = false; });
+}
+function handState(side) {
+  if (!state || performance.now() - lastOk > 500) return 'lost';
+  if (state.mode === 'pose') return 'pose';
+  const h = state.hands && state.hands[side];
+  if (!h) return 'idle';
+  if (h.blocked) return 'blocked';
+  if (h.engaged) return 'engaged';
+  return h.note ? 'dropped' : 'idle';
+}
+const COLOR = {idle: [0.62, 0.64, 0.68, 1], engaged: [0.25, 0.85, 0.45, 1], blocked: [0.95, 0.25, 0.25, 1],
+               dropped: [0.98, 0.62, 0.15, 1], pose: [0.25, 0.55, 1.0, 1], lost: [0.8, 0.3, 0.9, 1]};
+const WHITE = [1, 1, 1, 1];
+const TEXT = {idle: 'idle', engaged: 'engaged', blocked: 'would collide, holding', dropped: 'tracking lost: release the grip (open the hand) and try again', pose: 'moving to preset pose', lost: 'teleop server not responding'};
+
+function renderStatus() {
+  const el = $('#status');
+  $('#tokbox').style.display = (!TOKEN || authBad) ? '' : 'none';
+  $('#handsHelp').style.display = $('#simAsHandBox').style.display = handsAllowed() ? '' : 'none';
+  if (!TOKEN) { el.innerHTML = '<span class="warn">No access token in the address</span>: use the full address printed in the terminal of the teleop server (it ends with ?k=...), or enter the token below.'; return; }
+  if (authBad) { el.innerHTML = '<span class="bad">Wrong access token</span>: check the address printed in the terminal of the teleop server (after the token has been changed, old bookmarks stop working).'; return; }
+  if (!state || performance.now() - lastOk > 1500) { el.innerHTML = '<span class="bad">Teleop server not responding</span> (it serves this page; this is what you see after it has exited)'; return; }
+  const parts = ['left', 'right'].map(s => {
+    const h = state.hands && state.hands[s], k = handState(s);
+    const cls = k === 'engaged' ? 'ok' : (k === 'idle' ? '' : 'warn');
+    return `${s === 'left' ? 'left' : 'right'} ${h && h.by_hand ? 'hand' : 'controller'} → ${h ? (h.arm === 'left' ? 'left' : 'right') + ' arm' : '?'}: <span class="${cls}">${h && h.note && k === 'dropped' ? h.note : TEXT[k]}</span>`;
+  });
+  el.innerHTML = `<b>Teleop server online</b> · stance: ${state.stance === 'facing' ? 'facing the robot' : 'same way as the robot'} · ` + parts.join(' · ');
+}
+setInterval(() => {                                    // outside XR and without the simulated controller, this heartbeat fetches the status
+  if (TOKEN && !session && !$('#simOn').checked) api('/state').then(s => { if (s && s.mode) { state = s; lastOk = performance.now(); } }).catch(() => {});
+  renderStatus();
+}, 400);
+$('#btnReady').onclick = () => post('/cmd', {name: 'ready'}).catch(() => {});
+$('#btnHome').onclick = () => post('/cmd', {name: 'home'}).catch(() => {});
+
+// ---------- simulated controller (exercises the whole chain without a headset) ----------
+const sim = {p: [0.2, 1.0, -0.3], yaw: 0, grip: false};
+function simHand() { return document.querySelector('input[name=simHand]:checked').value; }
+function simSample() {
+  const o = {p: sim.p.slice(), q: [0, Math.sin(sim.yaw / 2), 0, Math.cos(sim.yaw / 2)]}, trig = parseFloat($('#simTrig').value);
+  if (handsAllowed() && $('#simAsHand').checked) { o.curl = sim.grip ? 0.40 : 0.92; o.pinch = 0.09 - 0.08 * trig; }   // fist / open; fingertip distance 9 cm -> 1 cm
+  else { o.grip = sim.grip ? 1 : 0; o.trigger = trig; }
+  return o;
+}
+setInterval(() => {
+  if (session || !$('#simOn').checked) return;
+  const ctl = {}; ctl[simHand()] = simSample();
+  sendPose(ctl);
+  $('#simPos').textContent = `Simulated controller position (x right / y up / z back, metres): ${sim.p.map(v => v.toFixed(2)).join(', ')} · yaw ${(sim.yaw * 57.3).toFixed(0)}° · grip ${sim.grip ? 'held' : 'released'}`;
+}, 33);
+function setGrip(v) { sim.grip = v; $('#simGrip').classList.toggle('held', v); }
+$('#simGrip').addEventListener('pointerdown', () => setGrip(true));
+window.addEventListener('pointerup', () => setGrip(false));
+window.addEventListener('keydown', e => {
+  if (!$('#simOn').checked || e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' && e.target.type !== 'radio' && e.target.type !== 'range') return;
+  const k = e.key.toLowerCase(), s = 0.01;
+  if (k === ' ') { setGrip(true); e.preventDefault(); return; }
+  if (!sim.grip) return;
+  if (k === 'w') sim.p[2] -= s; else if (k === 's') sim.p[2] += s;
+  else if (k === 'a') sim.p[0] -= s; else if (k === 'd') sim.p[0] += s;
+  else if (k === 'e') sim.p[1] += s; else if (k === 'q') sim.p[1] -= s;
+  else if (k === 'z') sim.yaw += 5 * Math.PI / 180; else if (k === 'c') sim.yaw -= 5 * Math.PI / 180;
+});
+window.addEventListener('keyup', e => { if (e.key === ' ') setGrip(false); });
+
+// ---------- WebXR ----------
+let gl = null, prog = null, uMvp = null, uCol = null, refSpace = null, blend = 'opaque', handsOk = false;
+const prev = {left: 'idle', right: 'idle'};
+
+// Hand tracking: 25 joints in the order defined by WebXR Hand Input. 0 wrist; thumb 1-4; index 5-9; middle 10-14; ring 15-19; little finger 20-24 (the last one of each is the fingertip)
+const JOINTS = ['wrist', 'thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip'];
+for (const f of ['index', 'middle', 'ring', 'pinky']) for (const b of ['metacarpal', 'phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip']) JOINTS.push(f + '-finger-' + b);
+const THUMB_TIP = 4, INDEX_TIP = 9, CURL_FINGERS = [10, 15, 20];
+const jbuf = {left: new Float32Array(16 * 25), right: new Float32Array(16 * 25)};
+
+function handsAllowed() { return !!(state && state.allow_hands); }   // hand tracking is used only when the teleop server runs with --hands (default: controllers only)
+function isHand(src) {                                 // a real bare hand (not the hand shape a browser may also report while a controller is held)
+  return handsAllowed() && !!src.hand && (!src.gamepad || !src.gripSpace || Array.from(src.profiles || []).some(p => /hand/.test(p)));
+}
+function dist(m, a, b) { return Math.hypot(m[a * 16 + 12] - m[b * 16 + 12], m[a * 16 + 13] - m[b * 16 + 13], m[a * 16 + 14] - m[b * 16 + 14]); }
+function handSample(frame, src, m) {
+  // -> {p, q (wrist pose), curl, pinch} and fills m with the matrices of the 25 joints; returns null when the hand is not tracked
+  const spaces = JOINTS.map(n => src.hand.get(n));
+  if (spaces.some(sp => !sp)) return null;
+  const wrist = frame.getJointPose(spaces[0], refSpace);
+  if (!wrist || wrist.emulatedPosition) return null;
+  if (frame.fillPoses) { if (!frame.fillPoses(spaces, refSpace, m)) return null; }
+  else for (let i = 0; i < 25; i++) { const jp = frame.getJointPose(spaces[i], refSpace); if (!jp) return null; m.set(jp.transform.matrix, i * 16); }
+  let curl = 0;
+  for (const b of CURL_FINGERS) {                      // fingertip-to-wrist distance / length along the bones from wrist to fingertip: straight ≈ 0.95, fist ≈ 0.4
+    let len = dist(m, b, 0);
+    for (let k = 0; k < 4; k++) len += dist(m, b + k + 1, b + k);
+    curl += dist(m, b + 4, 0) / len / CURL_FINGERS.length;
+  }
+  const pinch = dist(m, THUMB_TIP, INDEX_TIP);
+  if (!isFinite(curl) || !isFinite(pinch)) return null;
+  const p = wrist.transform.position, o = wrist.transform.orientation;
+  return {p: [p.x, p.y, p.z], q: [o.x, o.y, o.z, o.w], curl, pinch};
+}
+
+let actx = null;
+const lastBeep = {left: 0, right: 0};
+function beep(side, k) {                               // bare hands cannot vibrate: high tone = engaged, lower tone = released, long low tone = blocked / tracking lost
+  const now = performance.now();
+  if (now - lastBeep[side] < 300 || (k !== 'engaged' && k !== 'idle' && k !== 'blocked' && k !== 'dropped')) return;
+  lastBeep[side] = now;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), bad = k === 'blocked' || k === 'dropped';
+    o.frequency.value = k === 'engaged' ? 880 : (bad ? 220 : 440);
+    g.gain.value = 0.08;
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + (bad ? 0.25 : 0.07));
+  } catch (e) {}
+}
+
+function mul(a, b) {                                   // 4x4, column-major: a·b
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++)
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+  return o;
+}
+function scaled(m, s) { const o = new Float32Array(m); for (let i = 0; i < 12; i++) o[i] *= s; return o; }
+
+function initGl(canvas) {
+  gl = canvas.getContext('webgl', {xrCompatible: true, alpha: true, antialias: true});
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+  prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, 'attribute vec3 p; uniform mat4 mvp; void main(){ gl_Position = mvp * vec4(p, 1.0); }'));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, 'precision mediump float; uniform vec4 col; void main(){ gl_FragColor = col; }'));
+  gl.linkProgram(prog);
+  uMvp = gl.getUniformLocation(prog, 'mvp'); uCol = gl.getUniformLocation(prog, 'col');
+  const v = [], f = [[0, 1, 2, 3], [5, 4, 7, 6], [4, 0, 3, 7], [1, 5, 6, 2], [3, 2, 6, 7], [4, 5, 1, 0]];
+  const c = [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1], [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1]];
+  for (const q of f) for (const i of [0, 1, 2, 0, 2, 3]) v.push(c[q[i]][0] * 0.5, c[q[i]][1] * 0.5, c[q[i]][2] * 0.5);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p');
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+}
+
+async function enter(mode) {
+  try {
+    const s = await navigator.xr.requestSession(mode, {requiredFeatures: ['local-floor'], optionalFeatures: handsAllowed() ? ['hand-tracking'] : []});
+    handsOk = !handsAllowed() || !s.enabledFeatures || Array.from(s.enabledFeatures).includes('hand-tracking');
+    if (!gl) initGl(document.createElement('canvas'));
+    await gl.makeXRCompatible();
+    s.updateRenderState({baseLayer: new XRWebGLLayer(s, gl)});
+    refSpace = await s.requestReferenceSpace('local-floor');
+    blend = s.environmentBlendMode || 'opaque';
+    session = s;
+    s.addEventListener('end', () => { session = null; $('#xrmsg').textContent = 'Session ended. Both arms stay where the grip was released.' + (handsOk ? '' : ' (The headset did not provide hand tracking this time: controllers only. To use bare hands, enable hand tracking in the headset settings first.)'); });
+    s.requestAnimationFrame(onFrame);
+  } catch (e) {
+    $('#xrmsg').textContent = 'Could not enter: ' + (e && e.message ? e.message : e);
+  }
+}
+
+function onFrame(t, frame) {
+  const s = frame.session;
+  s.requestAnimationFrame(onFrame);
+  const layer = s.renderState.baseLayer;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+  gl.clearColor(0, 0, 0, blend === 'opaque' ? 1 : 0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+
+  const ctl = {}, mats = {}, joints = {};
+  for (const src of s.inputSources) {
+    const side = src.handedness;
+    if (side !== 'left' && side !== 'right') continue;
+    const k = handState(side);
+    if (isHand(src)) {                                 // bare hand: wrist pose + fist curl + distance between thumb and index fingertips
+      const smp = handSample(frame, src, jbuf[side]);
+      if (!smp) continue;                              // tracking lost: this hand is left out of this frame; the teleop server releases it after 0.25 s
+      ctl[side] = smp;
+      mats[side] = jbuf[side].subarray(0, 16);
+      joints[side] = jbuf[side];
+      if (k !== prev[side]) { beep(side, k); prev[side] = k; }
+      continue;
+    }
+    if (!src.gripSpace || !src.gamepad) continue;
+    const pose = frame.getPose(src.gripSpace, refSpace);
+    if (!pose || pose.emulatedPosition) continue;
+    const p = pose.transform.position, o = pose.transform.orientation, b = src.gamepad.buttons;
+    ctl[side] = {p: [p.x, p.y, p.z], q: [o.x, o.y, o.z, o.w], trigger: b[0] ? b[0].value : 0, grip: b[1] ? b[1].value : 0};
+    mats[side] = pose.transform.matrix;
+    if (k !== prev[side]) {                            // vibrate on a state change: short pulse = engaged / released, long pulse = blocked / tracking lost
+      const h = src.gamepad.hapticActuators && src.gamepad.hapticActuators[0];
+      if (h && h.pulse) { try { h.pulse(k === 'blocked' || k === 'dropped' ? 1.0 : 0.5, k === 'blocked' || k === 'dropped' ? 160 : 40); } catch (e) {} }
+      prev[side] = k;
+    }
+  }
+  sendPose(ctl);
+
+  const viewer = frame.getViewerPose(refSpace);
+  if (!viewer) return;
+  gl.useProgram(prog);
+  for (const view of viewer.views) {
+    const vp = layer.getViewport(view);
+    gl.viewport(vp.x, vp.y, vp.width, vp.height);
+    const pv = mul(view.projectionMatrix, view.transform.inverse.matrix);
+    for (const side of ['left', 'right']) {
+      if (!mats[side]) continue;
+      gl.uniformMatrix4fv(uMvp, false, mul(pv, scaled(mats[side], 0.035)));
+      gl.uniform4fv(uCol, COLOR[handState(side)]);
+      gl.drawArrays(gl.TRIANGLES, 0, 36);
+      if (!joints[side]) continue;
+      const h = state && state.hands && state.hands[side], follow = !!(h && h.caught);
+      for (let i = 1; i < 25; i++) {                   // one small cube per finger joint; while the gripper follows the pinch, the thumb and index fingertips turn white and larger
+        const tip = follow && (i === THUMB_TIP || i === INDEX_TIP);
+        gl.uniformMatrix4fv(uMvp, false, mul(pv, scaled(joints[side].subarray(i * 16, i * 16 + 16), tip ? 0.016 : 0.009)));
+        gl.uniform4fv(uCol, tip ? WHITE : COLOR.idle);
+        gl.drawArrays(gl.TRIANGLES, 0, 36);
+      }
+    }
+  }
+}
+
+(async () => {
+  const xr = navigator.xr;
+  if (!xr) {
+    $('#xrmsg').textContent = window.isSecureContext ? 'This browser has no WebXR (not a headset browser?). The simulated controller below still works.'
+      : 'This page was not opened over https, so the browser does not offer WebXR. Use the https address printed by the teleop server.';
+    return;
+  }
+  const ar = await xr.isSessionSupported('immersive-ar').catch(() => false);
+  const vr = await xr.isSessionSupported('immersive-vr').catch(() => false);
+  $('#btnAR').disabled = !ar; $('#btnVR').disabled = !vr;
+  $('#btnAR').onclick = () => enter('immersive-ar');
+  $('#btnVR').onclick = () => enter('immersive-vr');
+  if (!ar && !vr) $('#xrmsg').textContent = 'No VR / AR is available on this device (not a headset?). The simulated controller below still works.';
+  else if (!ar) $('#xrmsg').textContent = 'This headset browser does not support passthrough AR, only VR. In VR you cannot see the robot, so do not use it with the real robot.';
+})();
+</script>
+</body>
+</html>

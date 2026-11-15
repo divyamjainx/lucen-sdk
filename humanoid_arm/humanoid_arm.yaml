@@ -1,0 +1,222 @@
+# humanoid_arm/humanoid_arm.yaml - configuration of the humanoid_arm robot: two 7-DoF arms with grippers on a
+# column, 16 actuators on one MC02 board.
+#
+# Single source of truth: bridge.py, the simulated bridge (tools/fake_bridge.py), the model builder
+# (tools/build_arm_model.py), the motor and calibration tools and the teleoperation front ends all read this
+# file; pass it with `--config humanoid_arm/humanoid_arm.yaml`. Units: rad, rad/s, N·m, m unless noted.
+#
+# Per-unit calibration: the `sign` / `offset` of every joint belong to one physical robot. Re-calibrate them
+# with tools/calib_arm.py after replacing a motor, after re-assembling a joint, or when this file is used on
+# another unit. `mc02.port` must point at this robot's MC02 board: /dev/mc02 when a single board is connected,
+# the board's /dev/serial/by-id/... path when several are.
+# Full guide: humanoid_arm/README.md and docs/arm_guide.md. Safety: docs/safety.md.
+
+# calibrated: true = sign / offset have been calibrated on this unit. While it is false the bridge only allows
+# watching (reading joint angles): it never enables the motors or applies torque. After replacing a motor or
+# re-assembling a joint set it back to false, redo the zero pose and the direction check, then run
+#     python tools/calib_arm.py --config humanoid_arm/humanoid_arm.yaml --mark-calibrated
+calibrated: true
+
+# ---- MC02 board (see docs/mc02.md) ----
+# One board drives both arms: mc02:0 = CAN1 (connector pair at the top-right corner of the board) = left arm,
+# ids 1-8; mc02:1 = CAN2 (pair at the top-left corner) = right arm, ids 9-16. Eight motors per bus is the
+# board's maximum (8 failsafe slots per bus). Wire only the CAN L / H signal pins plus one separate ground
+# wire to the motor power ground; 48 V motor power does not pass through the board.
+# bus_serials: USB serial number expected for each device, checked by tools/check_ports.py; empty = no check.
+bus_serials:
+  /dev/mc02: ""
+mc02:
+  # port: serial device of this robot's board. Every MC02 board is named /dev/mc02, so that name is only
+  # unambiguous while a single board is connected. With several boards on one computer use this board's
+  # fixed path, which contains its USB serial number (`ls -l /dev/serial/by-id/ | grep MC02`), and confirm it:
+  #     python tools/set_motor_id.py --config humanoid_arm/humanoid_arm.yaml --port <path> --check
+  port: /dev/mc02
+  # watchdog_ms: link watchdog; if the host sends nothing for this long, the board itself keeps sending damping
+  # (kd-only) frames to every motor.
+  watchdog_ms: 100
+# can_timeout: motor-side CAN timeout (RobStride parameter 0x7028, unit 50 µs: 10000 = 500 ms). A motor that
+# receives no CAN frame for this long disables itself. It is the only protection when the board loses power
+# (unplugging USB powers the board down, watchdog included). New motors ship with 0 = off: before applying
+# torque for the first time run
+#     python tools/set_can_timeout.py --config humanoid_arm/humanoid_arm.yaml --write --save
+can_timeout: 10000
+
+# ---- Joint table ----
+#   name          joint name in the MuJoCo model (humanoid_arm/mjcf/humanoid_arm.xml). The model reuses
+#                 leg-style names: hip_pitch = shoulder pitch, hip_roll = shoulder roll, hip_yaw = upper-arm yaw,
+#                 knee = elbow, link4 / link5 / link6 = the three wrist joints.
+#   alias         display name of the joint (shown by the web jog page)
+#   id            CAN id, increasing from shoulder to gripper: left arm 1-8, right arm 9-16
+#   bus           mc02:0 = left arm, mc02:1 = right arm
+#   sign, offset  per-unit calibration: joint angle = sign * (motor angle - offset). Zero pose: both arms
+#                 hanging straight down, grippers fully open (`calib_arm.py --zero-here all`); directions are
+#                 checked with `calib_arm.py --signs`. The zero of link6 (rotation of the gripper about the
+#                 forearm axis) is set by eye: with the arm hanging, the two fingers sit side by side on a
+#                 line parallel to the line through both shoulders.
+#   motor         motor model. From shoulder to wrist: RS06 RS06 RS00 RS06 RS02 RS00 RS00; gripper: RS05.
+#                 It must name the motor actually fitted: the models differ in torque scaling (for example
+#                 ±5.5 N·m for the RS05 against ±6 N·m for the EL05).
+#   range         joint limits [lower, upper] = the limits in the MJCF (tools/build_arm_model.py reports a
+#                 mismatch). The roll ranges of the left and right arm mirror each other.
+#   kind: gripper marks the gripper actuator
+joints:
+  - {name: l_hip_pitch_joint, alias: left_joint_1,  id: 1,  bus: mc02:0, sign: -1, offset: +0.10235, motor: RS06, range: [-1.309, 1.309]}
+  - {name: l_hip_roll_joint,  alias: left_joint_2,  id: 2,  bus: mc02:0, sign: +1, offset: -2.44836, motor: RS06, range: [-1.222, 0.349]}
+  - {name: l_hip_yaw_joint,   alias: left_joint_3,  id: 3,  bus: mc02:0, sign: +1, offset: -0.07202, motor: RS00, range: [-1.047, 1.047]}
+  - {name: l_knee_joint,      alias: left_joint_4,  id: 4,  bus: mc02:0, sign: +1, offset: +2.66035, motor: RS06, range: [-1.9199, 0.0]}
+  - {name: l_link4_joint,     alias: left_joint_5,  id: 5,  bus: mc02:0, sign: +1, offset: +0.47534, motor: RS02, range: [-1.5708, 1.5708]}
+  - {name: l_link5_joint,     alias: left_joint_6,  id: 6,  bus: mc02:0, sign: +1, offset: -2.93412, motor: RS00, range: [-1.5708, 1.5708]}
+  - {name: l_link6_joint,     alias: left_joint_7,  id: 7,  bus: mc02:0, sign: +1, offset: -0.12414, motor: RS00, range: [-2.0944, 2.0944]}
+  - {name: l_gripper_joint,   alias: left_gripper,  id: 8,  bus: mc02:0, sign: +1, offset: +1.54596, motor: RS05, range: [0.0, 1.9548], kind: gripper}
+  - {name: r_hip_pitch_joint, alias: right_joint_1, id: 9,  bus: mc02:1, sign: +1, offset: +0.25813, motor: RS06, range: [-1.309, 1.309]}
+  - {name: r_hip_roll_joint,  alias: right_joint_2, id: 10, bus: mc02:1, sign: +1, offset: -1.81500, motor: RS06, range: [-0.349, 1.222]}
+  - {name: r_hip_yaw_joint,   alias: right_joint_3, id: 11, bus: mc02:1, sign: +1, offset: +1.68270, motor: RS00, range: [-1.047, 1.047]}
+  - {name: r_knee_joint,      alias: right_joint_4, id: 12, bus: mc02:1, sign: +1, offset: -1.83617, motor: RS06, range: [-1.9199, 0.0]}
+  - {name: r_link4_joint,     alias: right_joint_5, id: 13, bus: mc02:1, sign: +1, offset: +2.79630, motor: RS02, range: [-1.5708, 1.5708]}
+  - {name: r_link5_joint,     alias: right_joint_6, id: 14, bus: mc02:1, sign: +1, offset: +1.22097, motor: RS00, range: [-1.5708, 1.5708]}
+  - {name: r_link6_joint,     alias: right_joint_7, id: 15, bus: mc02:1, sign: +1, offset: +2.27068, motor: RS00, range: [-2.0944, 2.0944]}
+  - {name: r_gripper_joint,   alias: right_gripper, id: 16, bus: mc02:1, sign: +1, offset: -2.27905, motor: RS05, range: [0.0, 1.9548], kind: gripper}
+
+# ---- Per-model motor parameters ----
+# Physical properties of the motor models (the EL05 entries apply only if an EL05 gripper motor is fitted):
+#   tau_max         rated peak torque (N·m); do not edit
+#   vel_limit       speed limit (rad/s). Values of the biped's motor firmware; not read back from these
+#                   motors and used only by the simulated bridge (tools/fake_bridge.py).
+#   armature        rotor inertia reflected through the gearbox (kg·m²), identified on the bench
+#                   (RS05 / EL05: estimates, not measured)
+#   joint_friction  Coulomb friction torque (N·m);  joint_damping: viscous coefficient (N·m·s/rad)
+tau_max:   {RS06: 36.0, RS02: 17.0, RS00: 14.0, EL05: 6.0, RS05: 5.5}
+# tau_limit: the deployed torque limit (N·m) = limit_torque in the motor firmware = the torque clip in
+# simulation. It is left at the factory value, which equals the rated peak, so new motors already hold these
+# numbers (compare with `python tools/set_torque.py --config humanoid_arm/humanoid_arm.yaml --check`).
+# There is no room to lower it: the arms are heavy (9.68 kg each by CAD mass). The model's largest gravity
+# torques over the workspace, without payload, are shoulder pitch 27.1 / shoulder roll 25.8 / upper-arm yaw
+# 11.6 / elbow 11.9 / link4 4.5 / link5 1.6 N·m (model values; see gravity_ff for how the model compares
+# with the robot). A stretched-out arm loads the shoulder motors far beyond their continuous rating (11 N·m
+# for the RS06): hold it for a short time only, and keep the elbows bent for longer work.
+tau_limit: {RS06: 36.0, RS02: 17.0, RS00: 14.0, EL05: 6.0, RS05: 5.5}
+vel_limit: {RS06: 10.0, RS02: 20.0, RS00: 33.0, EL05: 20.0, RS05: 20.0}
+armature:  {RS06: 0.0070, RS02: 0.0032, RS00: 0.0015, EL05: 0.0012, RS05: 0.0012}
+joint_friction: {RS06: 0.15, RS02: 0.12, RS00: 0.13, EL05: 0.10, RS05: 0.10}
+joint_damping: 0.02
+
+# ---- PD gains ----
+# gain_profiles: named sets of [kp, kd] per motor model (kp in N·m/rad, kd in N·m·s/rad), selected with
+# `bridge.py --profile <name>`. PD law in the motor:
+#     tau = clip(kp * (q_des - q) - kd * qd + tau_ff, ±tau_limit),  tau_ff = gravity feed-forward (below)
+#   mirror  the default profile of bridge.py
+#   jog     softer gains
+#   hold    the same values as mirror
+# A fixed-base arm carries its own weight, so low gains must be combined with gravity_ff: without
+# feed-forward the mirror gains would let the shoulder sag by more than 1 rad under the model's gravity torque.
+gain_profiles:
+  mirror: {RS06: [25.0, 1.5], RS02: [15.0, 0.8], RS00: [12.0, 0.6], EL05: [8.0, 0.4], RS05: [8.0, 0.4]}
+  jog:    {RS06: [15.0, 1.0], RS02: [10.0, 0.6], RS00: [8.0, 0.4],  EL05: [5.0, 0.3], RS05: [5.0, 0.3]}
+  hold:   {RS06: [25.0, 1.5], RS02: [15.0, 0.8], RS00: [12.0, 0.6], EL05: [8.0, 0.4], RS05: [8.0, 0.4]}
+
+# home_pose: the zero pose = CAD zero: both arms hanging straight down, grippers pointing down. The gravity
+# torque is about zero here; power-up and zero calibration start from this pose.
+# ready_pose: suggested start pose for teleoperation: elbows bent forward by about 70°, upper arms slightly
+# back. In the model it is free of contact and needs 7.3 N·m at the shoulder pitch and 10.5 N·m at the elbow,
+# within the continuous rating of the RS06 (11 N·m). A level forearm already takes about 11.8 N·m at the
+# elbow (forearm + wrist + gripper weigh about 5 kg), so do not park the arm with the upper arm raised
+# further forward.
+home_pose:
+  l_hip_pitch_joint: 0.0
+  l_hip_roll_joint: 0.0
+  l_hip_yaw_joint: 0.0
+  l_knee_joint: 0.0
+  l_link4_joint: 0.0
+  l_link5_joint: 0.0
+  l_link6_joint: 0.0
+  l_gripper_joint: 0.0
+  r_hip_pitch_joint: 0.0
+  r_hip_roll_joint: 0.0
+  r_hip_yaw_joint: 0.0
+  r_knee_joint: 0.0
+  r_link4_joint: 0.0
+  r_link5_joint: 0.0
+  r_link6_joint: 0.0
+  r_gripper_joint: 0.0
+ready_pose:
+  l_hip_pitch_joint: 0.2
+  l_hip_roll_joint: 0.0
+  l_hip_yaw_joint: 0.0
+  l_knee_joint: -1.2
+  l_link4_joint: 0.0
+  l_link5_joint: 0.0
+  l_link6_joint: 0.0
+  l_gripper_joint: 0.0
+  r_hip_pitch_joint: 0.2
+  r_hip_roll_joint: 0.0
+  r_hip_yaw_joint: 0.0
+  r_knee_joint: -1.2
+  r_link4_joint: 0.0
+  r_link5_joint: 0.0
+  r_link6_joint: 0.0
+  r_gripper_joint: 0.0
+
+# ---- Model files ----
+#   urdf, mjcf           CAD export, kept unmodified
+#   scene                working MuJoCo scene, generated from the mjcf and this file by
+#                            python tools/build_arm_model.py --config humanoid_arm/humanoid_arm.yaml
+#                        (motor parameters and torque limits filled in, end-effector sites and home / ready
+#                        keyframes added). Regenerate it after changing this file.
+#   passive_joints       joints of the MJCF without a motor: the two fingers of each gripper are sliders that
+#                        follow the gripper joint through equality constraints
+#   no_collision_bodies  bodies whose collision is switched off. The collision shape of base_link is the
+#                        convex hull of column, base plate and chest shell; it encloses the hands in the zero
+#                        pose and would report contacts that do not exist. Collisions between the arm links
+#                        stay active.
+model:
+  urdf:  humanoid_arm/urdf/humanoid_arm.urdf
+  mjcf:  humanoid_arm/mjcf/humanoid_arm.xml
+  scene: humanoid_arm/mjcf/humanoid_arm_scene.xml
+  passive_joints: [l_jaw_right_joint, l_jaw_left_joint, r_jaw_right_joint, r_jaw_left_joint]
+  no_collision_bodies: [base_link]
+
+# end_effector: reference frame of each hand for Cartesian teleoperation and inverse kinematics: a site
+# between the two fingers near the fingertips, given in the link6 frame (m). A nominal position, not a
+# measured tool centre point: adjust it for your gripper.
+end_effector:
+  - {link: l_link6, site: l_ee, site_pos: [0.0, 0.0044, -0.11]}
+  - {link: r_link6, site: r_ee, site_pos: [0.0, 0.0044, -0.11]}
+
+# ---- Gravity feed-forward (applied by bridge.py) ----
+# tau_ff = scale x (gravity torque of the MuJoCo model at the measured joint angles), clipped to
+# ±clip_frac x tau_limit and sent as the feed-forward torque of each motor command.
+#   model      MuJoCo model used for the computation. Needs the mujoco package on the robot computer; without
+#              it the bridge runs with zero feed-forward.
+#   scale      fraction of the model's gravity torque that is applied; 0 = off. 0.45 was measured on the
+#              robot: the real arm needs about half of the feed-forward the model computes (whether the CAD
+#              masses or the torque scaling cause this has not been established). The value sits slightly
+#              on the low side on purpose: with too little the arm only sags a little, with too much it
+#              rises by itself and cannot be brought down.
+#              Re-tuning (new payload, changed links): try values with `bridge.py --grav-scale` instead of
+#              editing this file. Start low (0.3) and increase; the static sag of shoulder and elbow must
+#              shrink as the scale grows. If it grows, a sign is wrong: go back to 0 at once. The status
+#              line of arm_lead_follow / arm_cam_teleop / arm_vr_teleop prints a suggested correction to
+#              add to the bridge's value.
+#              In simulation (tools/fake_bridge.py) the model is exact: run it with --grav-scale 1.0.
+#   clip_frac  cap of the feed-forward as a fraction of tau_limit: 0.8 x 36 = 28.8 N·m covers the model's
+#              27 N·m at the shoulder.
+gravity_ff:
+  model: humanoid_arm/mjcf/humanoid_arm_scene.xml
+  scale: 0.45
+  clip_frac: 0.8
+
+# bridge.port: TCP port bridge.py listens on for this configuration. Each robot configuration has its own
+# port (biped_Laika 9877, humanoid_arm 9879, Arm 9880, Arm pair 9881).
+bridge:
+  port: 9879
+title: Lucen Humanoid Arm          # title shown by the web jog page
+
+# safety_profiles: presets selected with `--safety` on the teleoperation front ends (default: slow).
+#   vel_max    maximum joint speed of the commanded target (rad/s)
+#   kp_scale   gain multiplier;  tau_scale: torque-limit multiplier
+# The front ends in this release apply vel_max only. kp_scale and tau_scale are not applied: choosing a
+# profile does not lower the gains or the torque limit.
+safety_profiles:
+  safe:   {kp_scale: 0.6, tau_scale: 0.5, vel_max: 0.5}
+  slow:   {kp_scale: 1.0, tau_scale: 0.8, vel_max: 1.0}
+  normal: {kp_scale: 1.0, tau_scale: 1.0, vel_max: 2.0}

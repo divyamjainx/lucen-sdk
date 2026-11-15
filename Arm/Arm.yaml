@@ -1,0 +1,191 @@
+# Arm/Arm.yaml - configuration of one Arm (6 joints + 1 gripper = 7 actuators) on its own MC02 board.
+# For a leader + follower pair of Arms on one board use Arm/Arm_pair.yaml instead.
+#
+# Single source of truth: bridge.py, the simulated bridge (tools/fake_bridge.py), the model builder
+# (tools/build_arm_model.py), the motor and calibration tools and the teleoperation front ends all read this
+# file; pass it with `--config Arm/Arm.yaml`. Units: rad, rad/s, N·m, m unless noted.
+#
+# This file ships UNCALIBRATED: `calibrated: false`, every `sign` is +1 and every `offset` is 0. `sign` /
+# `offset` are per-unit calibration values: calibrate with tools/calib_arm.py before first use, and again
+# after replacing a motor or re-assembling a joint. `mc02.port` must point at this arm's MC02 board: /dev/mc02
+# when a single board is connected, the board's /dev/serial/by-id/... path when several are.
+# Full guide: Arm/README.md and docs/arm_guide.md. Safety: docs/safety.md.
+
+# calibrated: false = sign / offset below are placeholders. While it is false the bridge only allows watching
+# (reading joint angles): it never enables the motors or applies torque. After setting the zero pose
+# (`calib_arm.py --zero-here all`) and checking the directions (`calib_arm.py --signs`), run
+#     python tools/calib_arm.py --config Arm/Arm.yaml --mark-calibrated
+calibrated: false
+
+# ---- MC02 board (see docs/mc02.md) ----
+# The board drives this one arm: mc02:0 = CAN1 (connector pair at the top-right corner of the board), 7 motors;
+# CAN2 stays unused. Wire only the CAN L / H signal pins plus one separate ground wire to the motor power
+# ground; 48 V motor power does not pass through the board.
+# bus_serials: USB serial number expected for each device, checked by tools/check_ports.py; empty = no check.
+bus_serials:
+  /dev/mc02: ""
+mc02:
+  # port: serial device of this arm's board. Every MC02 board is named /dev/mc02; with several boards on one
+  # computer use this board's fixed path instead (`ls -l /dev/serial/by-id/ | grep MC02`) and confirm it with
+  #     python tools/set_motor_id.py --config Arm/Arm.yaml --port <path> --check
+  port: /dev/mc02
+  # watchdog_ms: link watchdog; if the host sends nothing for this long, the board itself keeps sending damping
+  # (kd-only) frames to every motor.
+  watchdog_ms: 100
+# can_timeout: motor-side CAN timeout (RobStride parameter 0x7028, unit 50 µs: 10000 = 500 ms). A motor that
+# receives no CAN frame for this long disables itself. It is the only protection when the board loses power
+# (unplugging USB powers the board down, watchdog included). New motors ship with 0 = off: before applying
+# torque for the first time run
+#     python tools/set_can_timeout.py --config Arm/Arm.yaml --write --save
+can_timeout: 10000
+
+# ---- Joint table ----
+#   name          joint name in the MuJoCo model (Arm/mjcf/arm.xml)
+#   alias         display name of the joint (shown by the web jog page)
+#   id            CAN id, 1-7 from base to gripper
+#   bus           mc02:0 for all seven
+#   sign, offset  per-unit calibration: joint angle = sign * (motor angle - offset).
+#                 +1 / 0 here are PLACEHOLDERS, see `calibrated` above.
+#   motor         motor model: joints 1-3 RS06, joint 4 RS02, joints 5-6 RS00, gripper RS05. It must name the
+#                 motor actually fitted (the models differ in torque scaling); `set_motor_id.py --assign`
+#                 compares each motor's torque limit with this column.
+#   range         joint limits [lower, upper] = the limits in the MJCF (tools/build_arm_model.py reports a
+#                 mismatch)
+#   kind: gripper marks the gripper actuator
+joints:
+  - {name: joint1,        alias: joint_1, id: 1, bus: mc02:0, sign: +1, offset: +0.00000, motor: RS06, range: [-2.35619, 2.35619]}   # base yaw,       axis -Z
+  - {name: joint2,        alias: joint_2, id: 2, bus: mc02:0, sign: +1, offset: +0.00000, motor: RS06, range: [0.0, 3.14159]}        # shoulder pitch, axis -Y; zero at the lower limit
+  - {name: joint3,        alias: joint_3, id: 3, bus: mc02:0, sign: +1, offset: +0.00000, motor: RS06, range: [0.0, 2.61799]}        # elbow,          axis +Y; zero at the lower limit
+  - {name: joint4,        alias: joint_4, id: 4, bus: mc02:0, sign: +1, offset: +0.00000, motor: RS02, range: [-1.5708, 1.5708]}     # wrist pitch,    axis +Y
+  - {name: joint5,        alias: joint_5, id: 5, bus: mc02:0, sign: +1, offset: +0.00000, motor: RS00, range: [-1.5708, 1.5708]}     # wrist yaw,      axis -Z
+  - {name: joint6,        alias: joint_6, id: 6, bus: mc02:0, sign: +1, offset: +0.00000, motor: RS00, range: [-2.0944, 2.0944]}     # wrist roll,     axis -X
+  - {name: gripper_joint, alias: gripper, id: 7, bus: mc02:0, sign: +1, offset: +0.00000, motor: RS05, range: [0.0, 1.9548], kind: gripper}   # 0 = fully open, 1.955 = fully closed
+
+# ---- Per-model motor parameters ----
+# Physical properties of the motor models:
+#   tau_max         rated peak torque (N·m); do not edit
+#   vel_limit       speed limit (rad/s). Values of the biped's motor firmware; not read back from these
+#                   motors and used only by the simulated bridge (tools/fake_bridge.py).
+#   armature        rotor inertia reflected through the gearbox (kg·m²), identified on the bench
+#   joint_friction  Coulomb friction torque (N·m);  joint_damping: viscous coefficient (N·m·s/rad)
+# The RS05 values for vel_limit / armature / joint_friction are estimates (used in simulation only).
+tau_max:   {RS06: 36.0, RS02: 17.0, RS00: 14.0, RS05: 5.5}
+# tau_limit: the deployed torque limit (N·m) = limit_torque in the motor firmware = the torque clip in
+# simulation. It is left at the factory value, which equals the rated peak, so new motors already hold these
+# numbers (compare with `python tools/set_torque.py --config Arm/Arm.yaml --check`).
+# There is no room to lower it: the moving part of the arm weighs 8.61 kg by CAD mass. The model's largest
+# gravity torques over the workspace, without payload, are shoulder (joint2) 31.3 / elbow (joint3) 14.4 /
+# wrist (joint4) 4.5 / joint5 1.6 N·m (model values; see gravity_ff for how the model compares with the
+# robot). With the upper arm level and the forearm stretched out the shoulder is loaded far beyond the
+# continuous rating of the RS06 (11 N·m), and a level forearm alone exceeds it at the elbow: hold a
+# stretched-out arm for a short time only.
+tau_limit: {RS06: 36.0, RS02: 17.0, RS00: 14.0, RS05: 5.5}
+vel_limit: {RS06: 10.0, RS02: 20.0, RS00: 33.0, RS05: 20.0}
+armature:  {RS06: 0.0070, RS02: 0.0032, RS00: 0.0015, RS05: 0.0012}
+joint_friction: {RS06: 0.15, RS02: 0.12, RS00: 0.13, RS05: 0.10}
+joint_damping: 0.02
+
+# ---- PD gains ----
+# gain_profiles: named sets of [kp, kd] per motor model (kp in N·m/rad, kd in N·m·s/rad), selected with
+# `bridge.py --profile <name>`. PD law in the motor:
+#     tau = clip(kp * (q_des - q) - kd * qd + tau_ff, ±tau_limit),  tau_ff = gravity feed-forward (below)
+#   mirror  the default profile of bridge.py
+#   jog     softer gains
+#   hold    the same values as mirror
+# A fixed-base arm carries its own weight, so low gains must be combined with gravity_ff: without
+# feed-forward the mirror gains would let the elbow sag by 0.55 rad and the shoulder by up to 1.25 rad under
+# the model's gravity torque.
+gain_profiles:
+  mirror: {RS06: [25.0, 1.5], RS02: [15.0, 0.8], RS00: [12.0, 0.6], RS05: [8.0, 0.4]}
+  jog:    {RS06: [15.0, 1.0], RS02: [10.0, 0.6], RS00: [8.0, 0.4],  RS05: [5.0, 0.3]}
+  hold:   {RS06: [25.0, 1.5], RS02: [15.0, 0.8], RS00: [12.0, 0.6], RS05: [8.0, 0.4]}
+
+# home_pose: the zero pose = CAD zero = the stowed pose: upper arm lying flat against its lower limit, forearm
+# folded back on top of it (also at its lower limit), wrist in line with the forearm, gripper fully open.
+# Gravity presses joint2 / joint3 into their limits, so an unpowered arm rests in this pose; power-up and zero
+# calibration start from it.
+# ready_pose: suggested start pose for teleoperation: upper arm close to vertical, forearm pointing forward
+# and up, gripper level and pointing forward. In the model it is free of contact and the gravity torques stay
+# within the continuous rating of each motor. "Forward" is the model's -X direction (the side the forearm
+# opens towards once the upper arm is raised).
+home_pose:
+  joint1: 0.0
+  joint2: 0.0
+  joint3: 0.0
+  joint4: 0.0
+  joint5: 0.0
+  joint6: 0.0
+  gripper_joint: 0.0
+ready_pose:
+  joint1: 0.0
+  joint2: 1.3
+  joint3: 2.17
+  joint4: -0.87
+  joint5: 0.0
+  joint6: 0.0
+  gripper_joint: 0.0
+
+# soft_range: tighter limits for teleoperation. The front ends clamp their targets to it and pass it on to
+# the bridge, which clamps to it as well; joints not listed use `range`. joint2: the mechanical upper limit is
+# exactly π, and the bridge wraps angles to (-π, π], so a reading at that limit would jump to -π.
+# Teleoperation therefore stops at 2.9 rad (upper arm 76° past vertical, 14° short of level). Do not widen
+# it to the full range.
+soft_range:
+  joint2: [0.0, 2.9]
+
+# ---- Model files ----
+#   urdf, mjcf      CAD export, kept unmodified
+#   scene           working MuJoCo scene, generated from the mjcf and this file by
+#                       python tools/build_arm_model.py --config Arm/Arm.yaml
+#                   (motor parameters and torque limits filled in, end-effector site and home / ready
+#                   keyframes added). Regenerate it after changing this file.
+#   passive_joints  joints of the MJCF without a motor: the two gripper fingers are sliders that follow
+#                   gripper_joint through equality constraints
+model:
+  urdf:  Arm/urdf/arm.urdf
+  mjcf:  Arm/mjcf/arm.xml
+  scene: Arm/mjcf/arm_scene.xml
+  passive_joints: [jaw_right_joint, jaw_left_joint]
+
+# end_effector: reference frame of the hand for Cartesian teleoperation and inverse kinematics: a site between
+# the two fingers, 2 cm behind the fingertips, given in the link6 frame (m). The tool axis is -X and the
+# fingertips are at x = -0.16. A nominal position, not a measured tool centre point: adjust it for your gripper.
+end_effector:
+  link: link6
+  site: ee
+  site_pos: [-0.14, 0.0, 0.0]
+
+# ---- Gravity feed-forward (applied by bridge.py) ----
+# tau_ff = scale x (gravity torque of the MuJoCo model at the measured joint angles), clipped to
+# ±clip_frac x tau_limit and sent as the feed-forward torque of each motor command.
+#   model      MuJoCo model used for the computation. Needs the mujoco package on the robot computer; without
+#              it the bridge runs with zero feed-forward.
+#   scale      fraction of the model's gravity torque that is applied; 0 = off, the setting of this
+#              uncalibrated file. After calibration try values with `bridge.py --grav-scale`: start at 0.3
+#              and increase step by step. Do not go straight to 1.0: the calibrated robots need only about
+#              half of the feed-forward the model computes (humanoid_arm uses 0.45, Arm/Arm_pair.yaml 0.53),
+#              and with too much the arm rises by itself. The static sag must shrink as the scale grows; if
+#              it grows, a sign is wrong: go back to 0 at once.
+#              In simulation (tools/fake_bridge.py) the model is exact: run it with --grav-scale 1.0.
+#   clip_frac  cap of the feed-forward as a fraction of tau_limit: 0.9 x 36 = 32.4 N·m covers the model's
+#              31.3 N·m at the shoulder.
+gravity_ff:
+  model: Arm/mjcf/arm_scene.xml
+  scale: 0.0
+  clip_frac: 0.9
+
+# bridge.port: TCP port bridge.py listens on for this configuration. Each robot configuration has its own
+# port (biped_Laika 9877, humanoid_arm 9879, Arm 9880, Arm pair 9881).
+bridge:
+  port: 9880
+title: Lucen Arm 6+1 DoF           # title shown by the web jog page
+
+# safety_profiles: presets selected with `--safety` on the teleoperation front ends (default: slow).
+#   vel_max    maximum joint speed of the commanded target (rad/s)
+#   kp_scale   gain multiplier;  tau_scale: torque-limit multiplier
+# The front ends in this release apply vel_max only. kp_scale and tau_scale are not applied: choosing a
+# profile does not lower the gains or the torque limit.
+safety_profiles:
+  safe:   {kp_scale: 0.6, tau_scale: 0.5, vel_max: 0.5}
+  slow:   {kp_scale: 1.0, tau_scale: 0.8, vel_max: 1.0}
+  normal: {kp_scale: 1.0, tau_scale: 1.0, vel_max: 2.0}

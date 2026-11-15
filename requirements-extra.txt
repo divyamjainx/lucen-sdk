@@ -1,0 +1,6 @@
+# Optional: install only for the features you use
+pillow            # text overlay on recorded videos (--video)
+imageio-ffmpeg    # video recording (--video)
+opencv-python     # tools/arm_cam_teleop.py
+mediapipe         # tools/arm_cam_teleop.py
+# torch           # tools/export_ckpt.py and tools/wheeled_base_export.py (rsl_rl checkpoint -> ONNX); install the build that matches your training setup

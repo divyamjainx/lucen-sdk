@@ -1,0 +1,202 @@
+# Arm/Arm_pair.yaml - configuration of two identical Arms (6 joints + 1 gripper each) used as leader + follower
+# on one MC02 board: follower = CAN1 (mc02:0), ids 1-7; leader = CAN2 (mc02:1), ids 8-14.
+#
+# Single source of truth: bridge.py, the simulated bridge (tools/fake_bridge.py), tools/build_arm_model.py,
+# the motor and calibration tools and the teleoperation front ends (tools/arm_lead_follow.py among them) all
+# read this file; pass it with `--config Arm/Arm_pair.yaml`. The calibration of both arms is stored only
+# here; Arm/Arm.yaml (one arm on its own board) is not used with this setup.
+#
+# Per-unit calibration: the `sign` / `offset` of every joint belong to one physical pair of arms. Re-calibrate
+# with tools/calib_arm.py after replacing a motor, after re-assembling a joint, or on another unit.
+# `mc02.port` must point at this pair's MC02 board: /dev/mc02 when a single board is connected, the board's
+# /dev/serial/by-id/... path when several are. Guide: Arm/README.md, docs/arm_guide.md; safety: docs/safety.md.
+
+# calibrated: true = sign / offset have been calibrated on this unit (`calib_arm.py --zero-here all` with both
+# arms in the stowed pose, `--signs`, then `--mark-calibrated`). While it is false the bridge only allows
+# watching (reading joint angles): it never enables the motors or applies torque. After replacing a motor or
+# re-assembling a joint set it back to false and calibrate again.
+calibrated: true
+
+# ---- MC02 board (see docs/mc02.md) ----
+# mc02:0 = CAN1 (connector pair at the top-right corner of the board) = follower; mc02:1 = CAN2 (pair at the
+# top-left corner) = leader. The id ranges of the two arms do not overlap, so the tools detect swapped CAN
+# connectors. Wire only the CAN L / H signal pins plus one separate ground wire to the motor power ground;
+# 48 V motor power does not pass through the board.
+# bus_serials: USB serial number expected for each device, checked by tools/check_ports.py; empty = no check.
+bus_serials:
+  /dev/mc02: ""
+mc02:
+  # port: serial device of this pair's board. Every MC02 board is named /dev/mc02, so that name is only
+  # unambiguous while a single board is connected. With several boards on one computer use this board's
+  # fixed path, which contains its USB serial number (`ls -l /dev/serial/by-id/ | grep MC02`), and confirm it:
+  #     python tools/set_motor_id.py --config Arm/Arm_pair.yaml --port <path> --check
+  port: /dev/mc02
+  # watchdog_ms: link watchdog; if the host sends nothing for this long, the board itself keeps sending damping
+  # (kd-only) frames to every motor.
+  watchdog_ms: 100
+# can_timeout: motor-side CAN timeout (RobStride parameter 0x7028, unit 50 µs: 10000 = 500 ms). A motor that
+# receives no CAN frame for this long disables itself. It is the only protection when the board loses power
+# (unplugging USB powers the board down, watchdog included). New motors ship with 0 = off: before applying
+# torque for the first time run
+#     python tools/set_can_timeout.py --config Arm/Arm_pair.yaml --write --save
+can_timeout: 10000
+
+# ---- Joint table ----
+#   name          prefix + joint name of the single-arm model (Arm/mjcf/arm.xml); in the generated scene every
+#                 joint and link of an arm carries its prefix (see model.instances)
+#   alias         display name of the joint (shown by the web jog page)
+#   id            CAN id: follower 1-7, leader 8-14, from base to gripper
+#   bus           mc02:0 = follower, mc02:1 = leader
+#   sign, offset  per-unit calibration: joint angle = sign * (motor angle - offset). Zero pose = the stowed pose
+#                 (see home_pose); the zeros of joint1 / joint5 / joint6 are set by eye.
+#   motor         motor model, the same for both arms: joints 1-3 RS06, joint 4 RS02, joints 5-6 RS00,
+#                 gripper RS05
+#   range         joint limits [lower, upper] = the limits in the MJCF
+#   kind: gripper marks the gripper actuator
+joints:
+  - {name: follower_joint1,         alias: follower_joint_1,  id: 1,  bus: mc02:0, sign: +1, offset: -0.51290, motor: RS06, range: [-2.35619, 2.35619]}
+  - {name: follower_joint2,         alias: follower_joint_2,  id: 2,  bus: mc02:0, sign: +1, offset: +3.04461, motor: RS06, range: [0.0, 3.14159]}
+  - {name: follower_joint3,         alias: follower_joint_3,  id: 3,  bus: mc02:0, sign: +1, offset: -2.23595, motor: RS06, range: [0.0, 2.61799]}
+  - {name: follower_joint4,         alias: follower_joint_4,  id: 4,  bus: mc02:0, sign: +1, offset: +1.67501, motor: RS02, range: [-1.5708, 1.5708]}
+  - {name: follower_joint5,         alias: follower_joint_5,  id: 5,  bus: mc02:0, sign: -1, offset: -1.48666, motor: RS00, range: [-1.5708, 1.5708]}
+  - {name: follower_joint6,         alias: follower_joint_6,  id: 6,  bus: mc02:0, sign: -1, offset: +1.06205, motor: RS00, range: [-2.0944, 2.0944]}
+  - {name: follower_gripper_joint,  alias: follower_gripper,  id: 7,  bus: mc02:0, sign: +1, offset: +2.79610, motor: RS05, range: [0.0, 1.9548], kind: gripper}
+  - {name: leader_joint1,           alias: leader_joint_1,    id: 8,  bus: mc02:1, sign: +1, offset: -1.54485, motor: RS06, range: [-2.35619, 2.35619]}
+  - {name: leader_joint2,           alias: leader_joint_2,    id: 9,  bus: mc02:1, sign: +1, offset: -2.55195, motor: RS06, range: [0.0, 3.14159]}
+  - {name: leader_joint3,           alias: leader_joint_3,    id: 10, bus: mc02:1, sign: +1, offset: -0.61802, motor: RS06, range: [0.0, 2.61799]}
+  - {name: leader_joint4,           alias: leader_joint_4,    id: 11, bus: mc02:1, sign: +1, offset: +2.14381, motor: RS02, range: [-1.5708, 1.5708]}
+  - {name: leader_joint5,           alias: leader_joint_5,    id: 12, bus: mc02:1, sign: -1, offset: +0.99337, motor: RS00, range: [-1.5708, 1.5708]}
+  - {name: leader_joint6,           alias: leader_joint_6,    id: 13, bus: mc02:1, sign: -1, offset: +1.08828, motor: RS00, range: [-2.0944, 2.0944]}
+  - {name: leader_gripper_joint,    alias: leader_gripper,    id: 14, bus: mc02:1, sign: +1, offset: -2.88106, motor: RS05, range: [0.0, 1.9548], kind: gripper}
+
+# ---- Per-model motor parameters and PD gains ----
+# The same values as in Arm/Arm.yaml; see the explanations there.
+#   tau_max    rated peak torque (N·m); do not edit
+#   tau_limit  deployed torque limit (N·m) = limit_torque in the motor firmware = the torque clip in simulation.
+#              Left at the factory value (= rated peak), so nothing has to be written to new motors.
+#   vel_limit, armature, joint_friction, joint_damping: motor model properties used by the simulation
+#   gain_profiles: [kp, kd] per motor model, selected with `bridge.py --profile <name>` (default: mirror)
+tau_max:   {RS06: 36.0, RS02: 17.0, RS00: 14.0, RS05: 5.5}
+tau_limit: {RS06: 36.0, RS02: 17.0, RS00: 14.0, RS05: 5.5}
+vel_limit: {RS06: 10.0, RS02: 20.0, RS00: 33.0, RS05: 20.0}
+armature:  {RS06: 0.0070, RS02: 0.0032, RS00: 0.0015, RS05: 0.0012}
+joint_friction: {RS06: 0.15, RS02: 0.12, RS00: 0.13, RS05: 0.10}
+joint_damping: 0.02
+gain_profiles:
+  mirror: {RS06: [25.0, 1.5], RS02: [15.0, 0.8], RS00: [12.0, 0.6], RS05: [8.0, 0.4]}
+  jog:    {RS06: [15.0, 1.0], RS02: [10.0, 0.6], RS00: [8.0, 0.4],  RS05: [5.0, 0.3]}
+  hold:   {RS06: [25.0, 1.5], RS02: [15.0, 0.8], RS00: [12.0, 0.6], RS05: [8.0, 0.4]}
+
+# home_pose: the zero pose = the stowed pose: upper arm lying flat against its lower limit, forearm folded back
+# on top of it, wrist in line with the forearm, gripper fully open. ready_pose: the same as in Arm/Arm.yaml.
+home_pose:
+  follower_joint1: 0.0
+  follower_joint2: 0.0
+  follower_joint3: 0.0
+  follower_joint4: 0.0
+  follower_joint5: 0.0
+  follower_joint6: 0.0
+  follower_gripper_joint: 0.0
+  leader_joint1: 0.0
+  leader_joint2: 0.0
+  leader_joint3: 0.0
+  leader_joint4: 0.0
+  leader_joint5: 0.0
+  leader_joint6: 0.0
+  leader_gripper_joint: 0.0
+ready_pose:
+  follower_joint1: 0.0
+  follower_joint2: 1.3
+  follower_joint3: 2.17
+  follower_joint4: -0.87
+  follower_joint5: 0.0
+  follower_joint6: 0.0
+  follower_gripper_joint: 0.0
+  leader_joint1: 0.0
+  leader_joint2: 1.3
+  leader_joint3: 2.17
+  leader_joint4: -0.87
+  leader_joint5: 0.0
+  leader_joint6: 0.0
+  leader_gripper_joint: 0.0
+
+# soft_range: tighter limits for teleoperation (clamped by the front ends and by the bridge). The mechanical
+# upper limit of joint2 is exactly π and a reading there would wrap to -π, so teleoperation stops at 2.9 rad.
+soft_range:
+  follower_joint2: [0.0, 2.9]
+  leader_joint2: [0.0, 2.9]
+
+# ---- Model files ----
+#   urdf, mjcf      CAD export of the single arm, kept unmodified
+#   scene           working MuJoCo scene, generated by
+#                       python tools/build_arm_model.py --config Arm/Arm_pair.yaml
+#                   which instantiates the single-arm model once per entry of `instances` and fills in the
+#                   motor parameters from this file. Regenerate it after changing this file.
+#   instances       prefix = prefix added to the joint and link names of that arm; pos = position of its base
+#                   in the scene (m). The positions are placeholders, not a measured setup: side by side,
+#                   facing the same way, 1 m apart, where two arms doing the same motion cannot touch. They
+#                   only affect the collision check between the two arms, not the gravity feed-forward. If
+#                   your arms face each other or stand close together, change pos and regenerate the scene.
+#   passive_joints  joints of the MJCF without a motor (the gripper fingers)
+model:
+  urdf:  Arm/urdf/arm.urdf
+  mjcf:  Arm/mjcf/arm.xml
+  scene: Arm/mjcf/arm_pair_scene.xml
+  instances:
+    - {prefix: follower_, pos: [0.0, -0.5, 0.0]}
+    - {prefix: leader_,   pos: [0.0,  0.5, 0.0]}
+  passive_joints: [follower_jaw_right_joint, follower_jaw_left_joint, leader_jaw_right_joint, leader_jaw_left_joint]
+
+# end_effector: reference frame of each hand, a site between the two fingers 2 cm behind the fingertips, in
+# the link6 frame (m). A nominal position, as in Arm/Arm.yaml.
+end_effector:
+  - {link: follower_link6, site: follower_ee, site_pos: [-0.14, 0.0, 0.0]}
+  - {link: leader_link6,   site: leader_ee,   site_pos: [-0.14, 0.0, 0.0]}
+
+# ---- Gravity feed-forward (applied by bridge.py; see Arm/Arm.yaml for the definition of the fields) ----
+# Both arms need it: without feed-forward the forearm can hardly be lifted, and the leader cannot be moved by
+# hand. scale is not 1.0 because the arms need only about half of the feed-forward the model computes; with
+# too much an arm rises by itself and cannot be pushed down.
+# scale 0.53 comes from the gravity calibration that tools/arm_lead_follow.py runs at start-up on the robot
+# (it asked for more at both 0.3 and 0.47). It may still be slightly low and has not itself been confirmed on
+# the robot: verify it on your unit and try other values with `bridge.py --grav-scale` before editing this
+# file. In simulation (tools/fake_bridge.py) the model is exact: run it with --grav-scale 1.0.
+gravity_ff:
+  model: Arm/mjcf/arm_pair_scene.xml
+  scale: 0.53
+  clip_frac: 0.9
+
+# ---- Leader-follower teleoperation (tools/arm_lead_follow.py): lead one arm by hand, the other follows ----
+#   arms         arm name -> joint-name prefix. The arm listed first starts as the leader; while running, the
+#                roles are switched with the first letter of an arm's name (l / f).
+#   map          same = the follower copies the leader's joint angles (two identical arms);
+#                mirror = left-right mirrored (a left / right pair such as humanoid_arm)
+#   calib_poses  poses both arms move to for the gravity calibration at start-up, before returning to home
+#                (joint names without prefix). The second one is ready_pose. In the model the path home ->
+#                first -> second -> home, all joints moving at the same speed, is free of contact; check a
+#                changed path in simulation (tools/fake_bridge.py) before running it on the arms.
+#   ff_joints    joints whose calibration result is used to compute the suggested feed-forward correction
+#                (joints with a large gravity torque, where the estimate is accurate)
+lead_follow:
+  arms: {leader: leader_, follower: follower_}
+  map: same
+  calib_poses:
+    - {joint2: 0.8, joint3: 1.7, joint4: -0.5}
+    - {joint2: 1.3, joint3: 2.17, joint4: -0.87}
+  ff_joints: [joint2, joint3]
+
+# bridge.port: TCP port bridge.py listens on for this configuration. Each robot configuration has its own
+# port (biped_Laika 9877, humanoid_arm 9879, Arm 9880, Arm pair 9881).
+bridge:
+  port: 9881
+title: Lucen Arm 6+1 DoF · leader + follower
+
+# safety_profiles: presets selected with `--safety` on the teleoperation front ends (default: slow).
+#   vel_max    maximum joint speed of the commanded target (rad/s)
+#   kp_scale   gain multiplier;  tau_scale: torque-limit multiplier
+# The front ends in this release apply vel_max only. kp_scale and tau_scale are not applied: choosing a
+# profile does not lower the gains or the torque limit.
+safety_profiles:
+  safe:   {kp_scale: 0.6, tau_scale: 0.5, vel_max: 0.5}
+  slow:   {kp_scale: 1.0, tau_scale: 0.8, vel_max: 1.0}
+  normal: {kp_scale: 1.0, tau_scale: 1.0, vel_max: 2.0}
