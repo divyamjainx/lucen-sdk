@@ -157,6 +157,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(ROOT, "humanoid_arm/humanoid_arm.yaml"), help="robot config (default: humanoid_arm/humanoid_arm.yaml)")
     ap.add_argument("--host", default="127.0.0.1", help="host the bridge runs on")
+    ap.add_argument("--log", nargs="?", const="", default=None, metavar="CSV",
+                    help="record every target sent and the measured joint angles to a CSV file (no name: "
+                         "logs/<tool>_<time>.csv); recording does not change what is sent. "
+                         "tools/arm_log_report.py reads the file")
     ap.add_argument("--port", type=int, default=None, help="bridge port (default: bridge.port of the config)")
     ap.add_argument("--safety", default="slow",
                     help="safety profile (safety_profiles in the config); its vel_max limits the joint speed of the puppet")
@@ -174,7 +178,7 @@ def main():
     pup = Puppet(cfg, vel_max, leash=args.leash)
     print(f"[drag] connecting to {args.host}:{port} ({os.path.basename(args.config)}), safety profile {args.safety}: "
           f"joint speed ≤ {vel_max} rad/s, leash {args.leash} rad; {len(pup.names)} joints")
-    cli = BridgeClient(args.host, port, pup.names, pup.limits, mode="send")
+    cli = BridgeClient(args.host, port, pup.names, pup.limits, mode="send", log=args.log, log_meta={"config": args.config})
     if cli.unknown:
         print(f"[drag] !! joints unknown to the bridge: {cli.unknown}")
     pup.set_q(cli.q0)                                        # the puppet starts at the measured pose of the real arm

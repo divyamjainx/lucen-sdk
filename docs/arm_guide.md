@@ -10,9 +10,9 @@ chain; only `--config` differs.
 | Bridge port | 9879 | 9881 (pair) · 9880 (single) |
 | Details | [`humanoid_arm/README.md`](../humanoid_arm/README.md) | [`Arm/README.md`](../Arm/README.md) |
 
-The arms are driven by teleoperation or by joint position targets from your own program. To record
-demonstrations for imitation learning, log joint angles and targets through the bridge protocol
-([`connect.md`](connect.md), section 3).
+The arms are driven by teleoperation or by joint position targets from your own program. Any session can be
+recorded — the targets sent and the joint angles measured — to collect demonstrations or to check how closely
+the arm follows; see section 8.
 
 Below, `<yaml>` stands for the config of your robot.
 
@@ -168,3 +168,53 @@ Motors stay disabled throughout. Power-cycle and run `--check` once more when do
   holding it stretched out. The bridge prints an over-temperature warning above 75 °C.
 - **Grippers** are limited to 5.5 N·m. When the gripper closes on an object, the front ends keep its target
   at most 0.25 rad ahead of the measured position, so it does not keep squeezing harder.
+
+## 8. Recording a session
+
+Add `--log` to the web sliders, keyboard, mouse drag, lead by hand or VR front end:
+
+```bash
+python tools/arm_lead_follow.py --config Arm/Arm_pair.yaml --log              # -> logs/arm_lead_follow_<time>.csv
+python tools/arm_jog.py --config Arm/Arm.yaml --gripper --log my_run.csv      # a file name of your choice
+```
+
+In your own program, pass `log="my_run.csv"` to `BridgeClient` ([`connect.md`](connect.md), section 3).
+
+The file is a CSV with one row per target sent:
+
+| Column | Content |
+|---|---|
+| `t` | Seconds since the client started. The first line of the file (`# {...}`) holds `t0_unix`, the wall-clock time of `t = 0`, to line the rows up with a camera or another recording |
+| `cmd:<joint>` | The target sent in this row (rad) |
+| `q:<joint>` | The latest angle the bridge reported (rad). It is one or two cycles older than the target of the same row |
+
+With lead by hand, one file holds both arms: the leader's `q` columns are the demonstration, the follower's
+columns show how it was reproduced.
+
+Recording does not change what is sent. An existing file is never replaced (the new one gets a numbered
+suffix), the file is flushed once per second, and if writing fails — a full disk, for example — recording
+stops and the session carries on. The camera front end keeps its own log instead (see its `--help`).
+
+Afterwards, on any computer:
+
+```bash
+python tools/arm_log_report.py logs/arm_lead_follow_<time>.csv
+python tools/arm_log_report.py my_run.csv --poses my_run_poses.csv
+```
+
+The report compares targets with measurements, per joint and for the hand. The hand's **target pose** is where
+the targets put it according to the robot model; the **reached pose** is where the measured angles put it.
+
+| Figure | Meaning |
+|---|---|
+| while moving | The error over the whole run. Most of it is delay: the bridge moves the commanded position at no more than 1 rad/s, and the position loop follows with a lag |
+| delay removed | The same after shifting each joint's targets by the delay estimated from the data |
+| at rest | The error once the targets have stood still for a second. This is what the gains and the gravity feed-forward leave, and it grows with the load on the joint. If it is large on the shoulder and elbow, confirm the gravity feed-forward (section 4, step 3) |
+
+`--poses` writes both poses of every row (position in metres and orientation as a quaternion, in the world
+frame of the config's scene file), for example to compare where a model aimed with where your camera saw the
+object.
+
+**A log cannot show a calibration error.** The reached pose is computed from the encoder angles. If a joint's
+zero offset is wrong, the real hand is somewhere else and only a measurement from outside — a ruler, a camera
+— shows it. Check the calibration (section 5) before you trust the poses to the millimetre.

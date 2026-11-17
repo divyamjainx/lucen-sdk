@@ -32,7 +32,7 @@ A confirmation given earlier for another command does not carry over.
 
 | Class | Commands |
 |---|---|
-| **Simulation only — run freely** | `tools/sim2sim.py`, `tools/sim_fsm.py`, `tools/policy_gain_probe.py`, `tools/wheeled_base_sim2sim.py`, `tools/wheeled_base_accept.py`, `tools/fake_bridge.py` and any arm front end pointed at it (`127.0.0.1`), `tools/onnx_manifest.py`, `tools/contract_check.py`, `tools/export_isaac.py`, `tools/export_ckpt.py`, `tools/build_arm_model.py` |
+| **Simulation only — run freely** | `tools/sim2sim.py`, `tools/sim_fsm.py`, `tools/policy_gain_probe.py`, `tools/wheeled_base_sim2sim.py`, `tools/wheeled_base_accept.py`, `tools/fake_bridge.py` and any arm front end pointed at it (`127.0.0.1`), `tools/onnx_manifest.py`, `tools/contract_check.py`, `tools/export_isaac.py`, `tools/export_ckpt.py`, `tools/build_arm_model.py`, `tools/arm_log_report.py` (reads a recorded file, connects to nothing) |
 | **Hardware, read-only — ask first, low risk** | `tools/mc02_selftest.py` (without `--wd-test` / `--dfu`), `tools/check_ports.py`, `tools/set_torque.py --check`, `tools/set_can_timeout.py --check`, `tools/set_motor_id.py --scan` / `--check`, `tools/imu_reader.py --view` / `--verify-axes`, `tools/calib_arm.py --live`, `tools/calib_stance.py` without `--write`, `bridge.py` with a client in watch mode, `mirror_viewer.py --mode watch` |
 | **Enables motors — only with the confirmation above** | `tools/deploy_policy.py` (every mode), any client that connects to a real `bridge.py` in send mode (`tools/arm_web_jog.py`, `arm_jog.py`, `arm_drag_teleop.py`, `arm_lead_follow.py`, `arm_vr_teleop.py`, `arm_cam_teleop.py`, `mirror_viewer.py --mode send`, your own `BridgeClient(..., mode="send")`), `robstride_mit.py` self-tests, `tools/mc02_selftest.py --wd-test` |
 | **Writes to motors, the board or the calibration — only when the person asks for exactly that** | `tools/set_torque.py --write`, `tools/set_can_timeout.py --write`, `tools/set_motor_id.py --assign` / `--to`, `tools/calib_stance.py --write`, `tools/calib_arm.py --zero-here` / `--signs` / `--flip` / `--write` / `--mark-calibrated`, `tools/mc02_selftest.py --dfu` |
@@ -129,6 +129,12 @@ start from the pose the bridge returns (`q0`), move targets gradually, send at 5
 `range` / `soft_range` as limits, and remember that the bridge disables the motors if you stop sending for
 1.5 s. The bridge does not check for self-collision. Only after the program behaves in simulation, and with
 the confirmation of Rule 1, may it be pointed at a real bridge, first with slow motions.
+
+Record what the program does: pass `log="run.csv", log_meta={"config": "<yaml>"}` to `BridgeClient` (or `--log`
+to a front end), then run `python tools/arm_log_report.py run.csv`. It reports how far the measured arm was
+from its targets and, with `--poses`, the target and reached pose of the hand for every row
+(`docs/arm_guide.md`, section 8). Report these numbers rather than "it moved". The reached pose comes from the
+encoders: it cannot reveal a calibration error.
 
 ## Task: wheeled_base
 

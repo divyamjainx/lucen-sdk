@@ -27,9 +27,11 @@ Usage:
   python tools/arm_jog.py --config Arm/Arm.yaml --gripper                           # bridge or fake bridge on this machine
   python tools/arm_jog.py --config Arm/Arm.yaml --gripper --host <robot-ip>         # bridge on the robot computer
   python tools/arm_jog.py --config humanoid_arm/humanoid_arm.yaml --gripper --host <robot-ip> --safety safe
+  python tools/arm_jog.py --config Arm/Arm.yaml --gripper --log                     # record the session: logs/arm_jog_<time>.csv
 
 BridgeClient is a minimal client of the bridge protocol (hello / target / q). The other arm tools import it, and
-it can be used directly in your own programs (see docs/connect.md).
+it can be used directly in your own programs (see docs/connect.md). With log=... it records every target sent and
+the measured joint angles to a CSV file (JointLog); tools/arm_log_report.py reads that file.
 """
 import argparse
 import json
@@ -48,6 +50,66 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+class JointLog:
+    """CSV record of a session, written by BridgeClient(log=...): one row per target sent.
+
+    Line 1 is "# {json}": the joint list, the start time (t0_unix is the wall-clock time of t = 0) and whatever the
+    caller passed as meta. Line 2 is the header, then one row per send_target() call:
+      t            seconds since the client was created (monotonic clock)
+      cmd:<joint>  the target sent in this row (rad); empty where the row carried no target for that joint
+      q:<joint>    the latest angle the bridge reported (rad); it is one or two cycles older than the target
+    Recording never changes what is sent. The file is created with the first row, never replaces an existing file
+    (the name gets a numbered suffix instead) and is flushed once per second, so a run that ends with Ctrl+C or a
+    power cut keeps everything up to the last second. If writing fails, recording stops and the client carries on.
+    tools/arm_log_report.py reads the file."""
+
+    def __init__(self, path, joints, meta=None):
+        tool = os.path.splitext(os.path.basename(sys.argv[0] or ""))[0] or "arm"
+        path = os.path.abspath(path or os.path.join(ROOT, "logs", f"{tool}_{time.strftime('%Y%m%d_%H%M%S')}.csv"))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if not os.access(os.path.dirname(path), os.W_OK):
+            raise OSError(f"cannot write the log to {os.path.dirname(path)}")
+        stem, ext = os.path.splitext(path)
+        n = 1
+        while os.path.exists(path):
+            n += 1
+            path = f"{stem}_{n}{ext}"
+        self.path, self.joints, self.meta = path, list(joints), dict(meta or {})
+        self.f, self.rows, self.failed = None, 0, False
+        self.t0, self.t0_unix, self.last_flush = time.monotonic(), time.time(), 0.0
+        print(f"[log] this session is recorded to {self.path}")
+
+    def row(self, target, q):
+        if self.failed:
+            return
+        now = time.monotonic()
+        try:
+            if self.f is None:
+                self.f = open(self.path, "w", encoding="utf-8")
+                head = {"joints": self.joints, "started": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.t0_unix)),
+                        "t0_unix": round(self.t0_unix, 3)}
+                self.f.write("# " + json.dumps({**head, **self.meta}) + "\n")
+                self.f.write(",".join(["t"] + [f"{k}:{n}" for k in ("cmd", "q") for n in self.joints]) + "\n")
+            cells = [f"{float(d[n]):.5f}" if n in d and math.isfinite(float(d[n])) else ""
+                     for d in (target, q) for n in self.joints]
+            self.f.write(",".join([f"{now - self.t0:.4f}"] + cells) + "\n")
+            self.rows += 1
+            if now - self.last_flush >= 1.0:
+                self.f.flush()
+                self.last_flush = now
+        except (OSError, ValueError, TypeError) as e:
+            self.failed = True
+            print(f"\n[log] recording stopped: {e}")
+            self.close()
+
+    def close(self):
+        if self.f is not None and not self.f.closed:
+            try:
+                self.f.close()
+            except OSError:
+                pass
+
+
 class BridgeClient:
     """Minimal client of the bridge protocol (newline-delimited JSON over TCP).
 
@@ -57,9 +119,13 @@ class BridgeClient:
     q0, the measured pose right after enabling - start your target there.
     Thread-safe: a reader thread keeps the latest measured angles (latest()); the caller sends targets with
     send_target(). Keep sending: 1.5 s without a message and the bridge goes to damping and disables the motors.
+    log: a file name records the session, one row per send_target() (see JointLog); "" picks a name under logs/.
+    log_meta: a dict stored in the first line of that file, e.g. {"config": "Arm/Arm.yaml"} so that
+    tools/arm_log_report.py finds the robot model. Recording never changes what is sent.
     """
 
-    def __init__(self, host, port, joints, limits, mode="send", timeout=6.0):
+    def __init__(self, host, port, joints, limits, mode="send", timeout=6.0, log=None, log_meta=None):
+        self.log = JointLog(log, joints, log_meta) if log is not None else None      # before connecting: no motor is enabled yet if this fails
         self.sock = socket.create_connection((host, port), timeout=timeout)
         self.sock.settimeout(None)
         self.lock = threading.Lock()
@@ -130,6 +196,8 @@ class BridgeClient:
             raise ConnectionError("bridge disconnected")
         try:
             self._send({"target": {n: float(v) for n, v in target.items()}})
+            if self.log:
+                self.log.row(target, self.latest())
         except OSError:
             self.closed = True
             raise ConnectionError("bridge disconnected")
@@ -140,6 +208,8 @@ class BridgeClient:
 
     def close(self):
         self.closed = True
+        if self.log:
+            self.log.close()
         try:
             self.sock.close()
         except OSError:
@@ -218,6 +288,10 @@ def main():
     ap.add_argument("--config", required=True, metavar="YAML",
                     help="humanoid_arm/humanoid_arm.yaml | Arm/Arm.yaml | Arm/Arm_pair.yaml")
     ap.add_argument("--host", default="127.0.0.1", help="host the bridge runs on")
+    ap.add_argument("--log", nargs="?", const="", default=None, metavar="CSV",
+                    help="record every target sent and the measured joint angles to a CSV file (no name: "
+                         "logs/<tool>_<time>.csv); recording does not change what is sent. "
+                         "tools/arm_log_report.py reads the file")
     ap.add_argument("--port", type=int, default=None, help="bridge port (default: bridge.port of the config)")
     ap.add_argument("--step", type=float, default=0.02, help="target increment per key press (rad)")
     ap.add_argument("--safety", default="slow", help="safety profile (safety_profiles in the config); its vel_max limits how fast the target moves")
@@ -246,7 +320,7 @@ def main():
 
     print(f"[jog] connecting to {args.host}:{port} ({os.path.basename(args.config)}), safety profile {args.safety}: "
           f"vel_max {vel_max} rad/s, step {args.step} rad; joints {names}")
-    cli = BridgeClient(args.host, port, names, limits, mode="send")
+    cli = BridgeClient(args.host, port, names, limits, mode="send", log=args.log, log_meta={"config": args.config})
     if cli.unknown:
         print(f"[jog] !! joints unknown to the bridge: {cli.unknown}")
     target = {n: cli.q0[n] for n in cli.matched}        # the target starts at the measured pose, not at zero

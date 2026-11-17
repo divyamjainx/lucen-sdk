@@ -491,6 +491,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(ROOT, "humanoid_arm/humanoid_arm.yaml"), help="robot config (default: humanoid_arm/humanoid_arm.yaml); for the Arm pair use Arm/Arm_pair.yaml")
     ap.add_argument("--host", default="127.0.0.1", help="host the bridge runs on")
+    ap.add_argument("--log", nargs="?", const="", default=None, metavar="CSV",
+                    help="record every target sent and the measured joint angles to a CSV file (no name: "
+                         "logs/<tool>_<time>.csv); recording does not change what is sent. "
+                         "tools/arm_log_report.py reads the file")
     ap.add_argument("--port", type=int, default=None, help="bridge port (default: bridge.port of the config)")
     ap.add_argument("--leader", default=None,
                     help="arm led by hand at start-up, by name (humanoid_arm: left / right; default: the arm listed first "
@@ -529,7 +533,7 @@ def main():
         else "both arms raise themselves forward and outward to about 0.6 m height, hold for a few seconds, then return to home"
     print(f"[lead] connecting to {args.host}:{port} ({os.path.basename(args.config)}), leader = {args.leader}, band {args.band} rad,"
           f" safety profile {args.safety} (follower ≤ {vel_max} rad/s)")
-    cli = BridgeClient(args.host, port, lf.names, lf.limits, mode="send")
+    cli = BridgeClient(args.host, port, lf.names, lf.limits, mode="send", log=args.log, log_meta={"config": args.config})
     bad = out_of_range(cli.q0, lf.limits)
     if bad and not args.no_range_check:
         cli.close()                                          # no target sent: the bridge disconnects (damping -> disable), no joint moves

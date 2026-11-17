@@ -68,6 +68,7 @@ class Gateway:
     def __init__(self, cfg, bridge_host, bridge_port, safety, with_gripper, use_fk=True):
         self.cfg = cfg
         self.bridge = (bridge_host, bridge_port)
+        self.log, self.log_meta = None, None                 # --log: set by main()
         rows = [j for j in cfg["joints"] if j.get("enabled", True) and (with_gripper or j.get("kind") != "gripper")]
         soft = cfg.get("soft_range") or {}
         self.names = [j["name"] for j in rows]
@@ -106,7 +107,7 @@ class Gateway:
             if self.cli and not self.cli.closed:
                 return "connected"
             try:
-                cli = BridgeClient(self.bridge[0], self.bridge[1], self.names, self.limits, mode="send")
+                cli = BridgeClient(self.bridge[0], self.bridge[1], self.names, self.limits, mode="send", log=self.log, log_meta=self.log_meta)
             except Exception as e:
                 self.msg = f"could not connect to the bridge: {e}"
                 return self.msg
@@ -250,6 +251,10 @@ def main():
     ap.add_argument("--config", required=True, metavar="YAML",
                     help="humanoid_arm/humanoid_arm.yaml | Arm/Arm.yaml | Arm/Arm_pair.yaml")
     ap.add_argument("--bridge-host", default="127.0.0.1", help="host the bridge runs on")
+    ap.add_argument("--log", nargs="?", const="", default=None, metavar="CSV",
+                    help="record every target sent and the measured joint angles to a CSV file (no name: "
+                         "logs/<tool>_<time>.csv); recording does not change what is sent. "
+                         "tools/arm_log_report.py reads the file")
     ap.add_argument("--bridge-port", type=int, default=None, help="bridge port (default: bridge.port of the config)")
     ap.add_argument("--listen", default="127.0.0.1:8780",
                     help="address the page is served on (0.0.0.0:8780 makes it reachable from other machines)")
@@ -260,6 +265,7 @@ def main():
     cfg = yaml.safe_load(open(args.config))
     bport = args.bridge_port or int((cfg.get("bridge") or {}).get("port", 9877))
     gw = Gateway(cfg, args.bridge_host, bport, args.safety, args.gripper, use_fk=not args.no_fk)
+    gw.log, gw.log_meta = args.log, {"config": args.config}
     host, port = args.listen.rsplit(":", 1)
     srv = ThreadingHTTPServer((host, int(port)), make_handler(gw))
     print(f"[web] http://{host}:{port}/  -> bridge {args.bridge_host}:{bport}  safety profile {args.safety} "

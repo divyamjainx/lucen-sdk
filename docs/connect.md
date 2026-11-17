@@ -135,6 +135,11 @@ c.close()                              # the bridge goes to damping, then disabl
 Try it against simulation first: `python tools/fake_bridge.py --config Arm/Arm.yaml --grav-scale 1.0` runs the
 same bridge code in front of simulated motors, on the same port with the same protocol.
 
+To record what your program sent and what the arm did, add `log="my_run.csv"` (and, so that the report finds
+the model, `log_meta={"config": "Arm/Arm.yaml"}`) to the `BridgeClient(...)` call. Every `send_target` then
+writes one row with the targets and the latest measured angles; `python tools/arm_log_report.py my_run.csv`
+turns the file into tracking errors and hand poses. See [`arm_guide.md`](arm_guide.md), section 8.
+
 The bridge does two things for you: it clamps each target to the `limits` you sent in `hello` (send the
 `range` / `soft_range` from the config, not something wider), and it limits how fast the commanded position
 moves to 1 rad/s per joint. It does **not** check for self-collision and cannot tell whether your target makes

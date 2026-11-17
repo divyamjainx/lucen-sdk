@@ -84,6 +84,7 @@ Tools by purpose:
 | wheeled_base | `wheeled_base_io.py` · `wheeled_base_sim2sim.py` · `wheeled_base_accept.py` · `wheeled_base_export.py` |
 | Arms — front ends | `arm_web_jog.py` · `arm_jog.py` · `arm_drag_teleop.py` · `arm_lead_follow.py` · `arm_vr_teleop.py` · `arm_cam_teleop.py` |
 | Arms — calibration, model, simulation | `calib_arm.py` · `build_arm_model.py` · `fake_bridge.py` |
+| Arms — recording | `--log` on the front ends, `log=` in your own client · `arm_log_report.py` (targets vs. measurements, hand poses) |
 | Hardware | `mc02_selftest.py` · `set_motor_id.py` · `set_torque.py` · `set_can_timeout.py` · `check_ports.py` |
 
 Every tool has `--help`, and a usage section at the top of its source file.

@@ -737,6 +737,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=os.path.join(ROOT, "humanoid_arm/humanoid_arm.yaml"), help="robot config (default: humanoid_arm/humanoid_arm.yaml)")
     ap.add_argument("--host", default="127.0.0.1", help="host the bridge runs on (default: this computer)")
+    ap.add_argument("--log", nargs="?", const="", default=None, metavar="CSV",
+                    help="record every target sent and the measured joint angles to a CSV file (no name: "
+                         "logs/<tool>_<time>.csv); recording does not change what is sent. "
+                         "tools/arm_log_report.py reads the file")
     ap.add_argument("--port", type=int, default=None, help="bridge port (default: bridge.port in the yaml)")
     ap.add_argument("--listen", default=None, help="address the web page is served on (default: this computer's LAN address; 127.0.0.1 with --http)")
     ap.add_argument("--web-port", type=int, default=8443, help="port of the web page served to the headset")
@@ -775,7 +779,7 @@ def main():
     if not args.http:
         print(f"[vr] listening on {listen} only (headset cannot connect? pass --listen <this computer's address on its network>); the certificate is self-signed: Advanced -> Proceed")
     print(f"[vr] connecting to bridge {args.host}:{bport} ({os.path.basename(args.config)}), stance {args.stance}, scale {args.scale}, safety profile {args.safety} (≤ {vel_max} rad/s)")
-    cli = BridgeClient(args.host, bport, vt.names, vt.limits, mode="send")
+    cli = BridgeClient(args.host, bport, vt.names, vt.limits, mode="send", log=args.log, log_meta={"config": args.config})
     bad = out_of_range(cli.q0, vt.limits)
     if bad and not args.no_range_check:
         cli.close()
