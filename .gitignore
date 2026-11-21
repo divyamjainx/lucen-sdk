@@ -7,3 +7,13 @@ real_logs/
 *.npz
 *.mp4
 .DS_Store
+
+# Local editor state and experimental outputs
+.vscode/
+work/
+runs/
+reach_env_elbow_backup.py
+
+# Published simulation demonstrations
+!data/approach_demos.npz
+!data/approach_guided.npz

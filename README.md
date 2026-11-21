@@ -12,6 +12,13 @@ Models, parameters, simulation tools and real-robot software for Lucen robots.
 All four use the same RobStride actuators, the same motor driver, and the same MC02 interface board
 (USB to two CAN buses, with an on-board IMU).
 
+## Humanoid-arm training experiments
+
+For the added reaching, grasping, and approach-policy experiments, see
+[the training and replay guide](docs/arm_training.md). The published approach
+checkpoint is in `models/approach_bc/`. These experiments use a modified MuJoCo
+grasp scene and have only been evaluated in simulation.
+
 ## Where to start
 
 | You want to | Read |
@@ -88,6 +95,14 @@ Tools by purpose:
 | Hardware | `mc02_selftest.py` · `set_motor_id.py` · `set_torque.py` · `set_can_timeout.py` · `check_ports.py` |
 
 Every tool has `--help`, and a usage section at the top of its source file.
+
+## Network security
+
+The hardware bridge has no client authentication and listens on all interfaces.
+The arm web controls also lack authentication; keep them on localhost and do not
+expose control services to untrusted networks. See the
+[arm experiment security notes](docs/arm_training.md#security) for model-loading
+protections and network limitations.
 
 ## Ground rules
 

@@ -31,7 +31,7 @@ def main():
     ckpt_path, out_path = sys.argv[1], sys.argv[2]
     ref = sys.argv[4] if len(sys.argv) > 4 and sys.argv[3] == "--check" else None
 
-    sd = torch.load(ckpt_path, map_location="cpu", weights_only=False)["model_state_dict"]
+    sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)["model_state_dict"]
     norm = sorted(k for k in sd if "normalizer" in k)
     if norm:
         sys.exit(f"[export_ckpt] this checkpoint has an observation normalizer ({norm[0]}, ...). This tool exports the bare "

@@ -1,0 +1,231 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="humanoid_arm">
+
+  <compiler angle="radian" meshdir="../meshes" autolimits="true" balanceinertia="true" inertiafromgeom="false" />
+  <option timestep="0.002" integrator="implicitfast" />
+  <default>
+    <joint damping="0.5" armature="0.01" frictionloss="0.05" />
+    <default class="visual">
+      <geom type="mesh" contype="0" conaffinity="0" group="2" rgba="0.30 0.30 0.32 1" />
+    </default>
+    <default class="collision">
+      <geom type="mesh" group="3" rgba="0.8 0.3 0.3 0.4" />
+    </default>
+    <default class="jaw">
+      <joint damping="5" armature="0.005" />
+    </default>
+  </default>
+  <asset>
+    <mesh name="base_link" file="base_link.stl" />
+    <mesh name="l_hip_pitch_link" file="l_hip_pitch_link.stl" />
+    <mesh name="l_hip_roll_link" file="l_hip_roll_link.stl" />
+    <mesh name="l_hip_yaw_link" file="l_hip_yaw_link.stl" />
+    <mesh name="l_knee_link" file="l_knee_link.stl" />
+    <mesh name="l_link4" file="l_link4.stl" />
+    <mesh name="l_link5" file="l_link5.stl" />
+    <mesh name="l_link6" file="l_link6.stl" />
+    <mesh name="l_gripper_link" file="l_gripper_link.stl" />
+    <mesh name="l_jaw_right" file="l_jaw_right.stl" />
+    <mesh name="l_jaw_left" file="l_jaw_left.stl" />
+    <mesh name="r_hip_pitch_link" file="r_hip_pitch_link.stl" />
+    <mesh name="r_hip_roll_link" file="r_hip_roll_link.stl" />
+    <mesh name="r_hip_yaw_link" file="r_hip_yaw_link.stl" />
+    <mesh name="r_knee_link" file="r_knee_link.stl" />
+    <mesh name="r_link4" file="r_link4.stl" />
+    <mesh name="r_link5" file="r_link5.stl" />
+    <mesh name="r_link6" file="r_link6.stl" />
+    <mesh name="r_gripper_link" file="r_gripper_link.stl" />
+    <mesh name="r_jaw_right" file="r_jaw_right.stl" />
+    <mesh name="r_jaw_left" file="r_jaw_left.stl" />
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 .15 .2" width="512" height="512" />
+    <material name="grid" texture="grid" texrepeat="8 8" reflectance=".1" />
+  </asset>
+  <worldbody>
+    <light pos="0 -1.5 2.5" dir="0 0.5 -1" directional="true" />
+    <geom name="floor" type="plane" size="2 2 0.05" material="grid" />
+    <body name="base_link" pos="0 0 0">
+      <inertial pos="0 0.103944 0.403846" mass="25.72767" fullinertia="2.3578e+00 2.3470e+00 6.4582e-02 3.0876e-06 -3.4480e-08 7.9302e-02" />
+      <geom class="visual" mesh="base_link" />
+      <geom class="collision" mesh="base_link" name="base_link_col" contype="0" conaffinity="0" />
+      <body name="l_hip_pitch_link" pos="0.09972 0.095 0.798">
+        <inertial pos="0.051048 -0.001186 -0.000008" mass="0.868765" fullinertia="6.5521e-04 9.7709e-04 8.4756e-04 6.4244e-06 -3.3439e-07 7.8484e-09" />
+        <joint name="l_hip_pitch_joint" type="hinge" axis="1 0 0" range="-1.309 1.309" actuatorfrcrange="-36 36" damping="0.02" frictionloss="0.15" armature="0.007" />
+        <geom class="visual" mesh="l_hip_pitch_link" />
+        <geom class="collision" mesh="l_hip_pitch_link" name="l_hip_pitch_link_col" />
+        <body name="l_hip_roll_link" pos="0.056 -0.0291 0">
+          <inertial pos="0 0.029193 -0.060146" mass="2.059693" fullinertia="4.7119e-03 3.7988e-03 2.5091e-03 -3.2095e-08 -1.3711e-08 -1.1451e-05" />
+          <joint name="l_hip_roll_joint" type="hinge" axis="0 1 0" range="-1.222 0.349" actuatorfrcrange="-36 36" damping="0.02" frictionloss="0.15" armature="0.007" />
+          <geom class="visual" mesh="l_hip_roll_link" />
+          <geom class="collision" mesh="l_hip_roll_link" name="l_hip_roll_link_col" />
+          <body name="l_hip_yaw_link" pos="0 0.0291 -0.10966">
+            <inertial pos="-0.000152 -0.000002 -0.073433" mass="1.254816" fullinertia="3.3900e-03 4.3090e-03 2.2337e-03 1.3120e-08 -9.5808e-06 1.5339e-07" />
+            <joint name="l_hip_yaw_joint" type="hinge" axis="0 0 1" range="-1.047 1.047" actuatorfrcrange="-14 14" damping="0.02" frictionloss="0.13" armature="0.0015" />
+            <geom class="visual" mesh="l_hip_yaw_link" />
+            <geom class="collision" mesh="l_hip_yaw_link" name="l_hip_yaw_link_col" />
+            <body name="l_knee_link" pos="0.0286 0 -0.12375">
+              <inertial pos="-0.027728 0.000073 -0.070232" mass="1.756732" fullinertia="1.0730e-02 1.0508e-02 1.2574e-03 -1.1888e-06 -1.5682e-05 -9.0171e-06" />
+              <joint name="l_knee_joint" type="hinge" axis="1 0 0" range="-1.9199 0" actuatorfrcrange="-36 36" damping="0.02" frictionloss="0.15" armature="0.007" />
+              <geom class="visual" mesh="l_knee_link" />
+              <geom class="collision" mesh="l_knee_link" name="l_knee_link_col" />
+              <body name="l_link4" pos="-0.0008 0 -0.17">
+                <inertial pos="-0.028095 -0.070822 -0.070302" mass="1.217373" fullinertia="1.9041e-03 1.3681e-03 1.3154e-03 2.5474e-05 2.5348e-05 -6.8837e-04" />
+                <joint name="l_link4_joint" type="hinge" axis="-1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-17 17" damping="0.02" frictionloss="0.12" armature="0.0032" />
+                <geom class="visual" mesh="l_link4" />
+                <geom class="collision" mesh="l_link4" name="l_link4_col" />
+                <body name="l_link5" pos="-0.0278 -0.047584 -0.0804">
+                  <inertial pos="0.000003 0.040592 -0.005292" mass="1.182443" fullinertia="7.7475e-04 5.1816e-04 7.2014e-04 4.3011e-08 3.0235e-09 2.5539e-05" />
+                  <joint name="l_link5_joint" type="hinge" axis="0 1 0" range="-1.5708 1.5708" actuatorfrcrange="-14 14" damping="0.02" frictionloss="0.13" armature="0.0015" />
+                  <geom class="visual" mesh="l_link5" />
+                  <geom class="collision" mesh="l_link5" name="l_link5_col" />
+                  <body name="l_link6" pos="0.000004 0.046462 -0.040749">
+                    <inertial pos="0.000002 0.000014 -0.037543" mass="0.390039" fullinertia="2.9355e-04 6.1377e-04 4.2094e-04 9.1483e-08 -2.7091e-08 -6.7905e-07" />
+                    <joint name="l_link6_joint" type="hinge" axis="0 0 -1" range="-2.0944 2.0944" actuatorfrcrange="-14 14" damping="0.02" frictionloss="0.13" armature="0.0015" />
+                    <geom class="visual" mesh="l_link6" />
+                    <geom class="collision" mesh="l_link6" name="l_link6_col" />
+                    <body name="l_gripper_link" pos="0 -0.000052 -0.05">
+                      <inertial pos="0 -0.000008 -0.007215" mass="0.02312" fullinertia="3.3559e-06 5.1299e-06 7.4645e-06 -2.4369e-06 1.3193e-09 1.5817e-09" />
+                      <joint name="l_gripper_joint" type="hinge" axis="0 0 1" range="0 1.9548" actuatorfrcrange="-5.5 5.5" damping="0.02" frictionloss="0.1" armature="0.0012" />
+                      <geom class="visual" mesh="l_gripper_link" />
+                      <geom class="collision" mesh="l_gripper_link" name="l_gripper_link_col" />
+                    </body>
+                    <body name="l_jaw_right" pos="0 0.004433 -0.062004">
+                      <inertial pos="-0.057052 -0.0049 -0.030278" mass="0.461861" fullinertia="3.0770e-04 2.0700e-04 1.9749e-04 1.8211e-06 3.7233e-05 4.9282e-06" />
+                      <joint name="l_jaw_right_joint" type="slide" axis="-1 0 0" range="-0.043459 0" actuatorfrcrange="-200 200" class="jaw" />
+                      <geom class="visual" mesh="l_jaw_right" />
+                      <geom class="collision" mesh="l_jaw_right" name="l_jaw_right_col" />
+                    </body>
+                    <body name="l_jaw_left" pos="0 0.004433 -0.062004">
+                      <inertial pos="0.057133 -0.004161 -0.030348" mass="0.46081" fullinertia="3.0648e-04 2.0465e-04 1.9592e-04 1.1901e-06 -3.8381e-05 -4.4710e-06" />
+                      <joint name="l_jaw_left_joint" type="slide" axis="-1 0 0" range="0 0.043465" actuatorfrcrange="-200 200" class="jaw" />
+                      <geom class="visual" mesh="l_jaw_left" />
+                      <geom class="collision" mesh="l_jaw_left" name="l_jaw_left_col" />
+                    </body>
+                    <site name="l_ee" pos="0 0.0044 -0.11" size="0.01" rgba="1 0.2 0.2 0.8" group="2" />
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="r_hip_pitch_link" pos="-0.09422 0.095 0.798">
+        <inertial pos="-0.056258 -0.001186 -0.000008" mass="0.868765" fullinertia="6.5521e-04 9.7452e-04 8.4499e-04 -4.0814e-06 3.3334e-07 7.1261e-09" />
+        <joint name="r_hip_pitch_joint" type="hinge" axis="1 0 0" range="-1.309 1.309" actuatorfrcrange="-36 36" damping="0.02" frictionloss="0.15" armature="0.007" />
+        <geom class="visual" mesh="r_hip_pitch_link" />
+        <geom class="collision" mesh="r_hip_pitch_link" name="r_hip_pitch_link_col" />
+        <body name="r_hip_roll_link" pos="-0.0615 -0.0291 0">
+          <inertial pos="0 0.029193 -0.060146" mass="2.059693" fullinertia="4.7119e-03 3.7988e-03 2.5091e-03 -3.2095e-08 -1.3711e-08 -1.1451e-05" />
+          <joint name="r_hip_roll_joint" type="hinge" axis="0 1 0" range="-0.349 1.222" actuatorfrcrange="-36 36" damping="0.02" frictionloss="0.15" armature="0.007" />
+          <geom class="visual" mesh="r_hip_roll_link" />
+          <geom class="collision" mesh="r_hip_roll_link" name="r_hip_roll_link_col" />
+          <body name="r_hip_yaw_link" pos="0 0.0291 -0.10966">
+            <inertial pos="-0.000152 -0.000002 -0.073433" mass="1.254816" fullinertia="3.3900e-03 4.3090e-03 2.2337e-03 1.3120e-08 -9.5808e-06 1.5339e-07" />
+            <joint name="r_hip_yaw_joint" type="hinge" axis="0 0 1" range="-1.047 1.047" actuatorfrcrange="-14 14" damping="0.02" frictionloss="0.13" armature="0.0015" />
+            <geom class="visual" mesh="r_hip_yaw_link" />
+            <geom class="collision" mesh="r_hip_yaw_link" name="r_hip_yaw_link_col" />
+            <body name="r_knee_link" pos="0.0286 0 -0.12375">
+              <inertial pos="-0.027728 0.000073 -0.070232" mass="1.756732" fullinertia="1.0730e-02 1.0508e-02 1.2574e-03 -1.1888e-06 -1.5682e-05 -9.0171e-06" />
+              <joint name="r_knee_joint" type="hinge" axis="1 0 0" range="-1.9199 0" actuatorfrcrange="-36 36" damping="0.02" frictionloss="0.15" armature="0.007" />
+              <geom class="visual" mesh="r_knee_link" />
+              <geom class="collision" mesh="r_knee_link" name="r_knee_link_col" />
+              <body name="r_link4" pos="-0.0008 0 -0.17">
+                <inertial pos="-0.028095 -0.070822 -0.070302" mass="1.217373" fullinertia="1.9041e-03 1.3681e-03 1.3154e-03 2.5474e-05 2.5348e-05 -6.8837e-04" />
+                <joint name="r_link4_joint" type="hinge" axis="-1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-17 17" damping="0.02" frictionloss="0.12" armature="0.0032" />
+                <geom class="visual" mesh="r_link4" />
+                <geom class="collision" mesh="r_link4" name="r_link4_col" />
+                <body name="r_link5" pos="-0.0278 -0.047584 -0.0804">
+                  <inertial pos="0.000003 0.040592 -0.005292" mass="1.182443" fullinertia="7.7475e-04 5.1816e-04 7.2014e-04 4.3011e-08 3.0235e-09 2.5539e-05" />
+                  <joint name="r_link5_joint" type="hinge" axis="0 1 0" range="-1.5708 1.5708" actuatorfrcrange="-14 14" damping="0.02" frictionloss="0.13" armature="0.0015" />
+                  <geom class="visual" mesh="r_link5" />
+                  <geom class="collision" mesh="r_link5" name="r_link5_col" />
+                  <body name="r_link6" pos="0.000004 0.046462 -0.040749">
+                    <inertial pos="0.000002 0.000014 -0.037543" mass="0.390039" fullinertia="2.9355e-04 6.1377e-04 4.2094e-04 9.1483e-08 -2.7091e-08 -6.7905e-07" />
+                    <joint name="r_link6_joint" type="hinge" axis="0 0 -1" range="-2.0944 2.0944" actuatorfrcrange="-14 14" damping="0.02" frictionloss="0.13" armature="0.0015" />
+                    <geom class="visual" mesh="r_link6" />
+                    <geom class="collision" mesh="r_link6" name="r_link6_col" />
+                    <body name="r_gripper_link" pos="0 -0.000051 -0.0485">
+                      <inertial pos="0 -0.000009 -0.008715" mass="0.02312" fullinertia="3.3559e-06 5.1299e-06 7.4645e-06 -2.4369e-06 1.3193e-09 1.5817e-09" />
+                      <joint name="r_gripper_joint" type="hinge" axis="0 0 1" range="0 1.9548" actuatorfrcrange="-5.5 5.5" damping="0.02" frictionloss="0.1" armature="0.0012" />
+                      <geom class="visual" mesh="r_gripper_link" />
+                      <geom class="collision" mesh="r_gripper_link" name="r_gripper_link_col" />
+                    </body>
+                    <body name="r_jaw_right" pos="0 0.004433 -0.062004">
+                      <inertial pos="-0.057052 -0.0049 -0.030278" mass="0.461861" fullinertia="3.0770e-04 2.0700e-04 1.9749e-04 1.8211e-06 3.7233e-05 4.9282e-06" />
+                      <joint name="r_jaw_right_joint" type="slide" axis="-1 0 0" range="-0.043459 0" actuatorfrcrange="-200 200" class="jaw" />
+                      <geom class="visual" mesh="r_jaw_right" />
+                      <geom class="collision" mesh="r_jaw_right" name="r_jaw_right_col" contype="0" conaffinity="0" />
+                    <geom name="r_jaw_right_pad" type="box" pos="-0.040000000000000056 -3.3000000000012186e-05 -0.04799600000000004" quat="1.0000000000000002 0.0 0.0 0.0" size="0.004 0.018 0.020" rgba="0.2 0.7 0.3 1" contype="1" conaffinity="1" friction="1.0 0.005 0.0001" condim="4" /></body>
+                    <body name="r_jaw_left" pos="0 0.004433 -0.062004">
+                      <inertial pos="0.057133 -0.004161 -0.030348" mass="0.46081" fullinertia="3.0648e-04 2.0465e-04 1.9592e-04 1.1901e-06 -3.8381e-05 -4.4710e-06" />
+                      <joint name="r_jaw_left_joint" type="slide" axis="-1 0 0" range="0 0.043465" actuatorfrcrange="-200 200" class="jaw" />
+                      <geom class="visual" mesh="r_jaw_left" />
+                      <geom class="collision" mesh="r_jaw_left" name="r_jaw_left_col" contype="0" conaffinity="0" />
+                    <geom name="r_jaw_left_pad" type="box" pos="0.04000000000000004 -3.3000000000012186e-05 -0.04799600000000004" quat="1.0000000000000002 0.0 0.0 0.0" size="0.004 0.018 0.020" rgba="0.2 0.7 0.3 1" contype="1" conaffinity="1" friction="1.0 0.005 0.0001" condim="4" /></body>
+                    <site name="r_ee" pos="0 0.0044 -0.11" size="0.01" rgba="1 0.2 0.2 0.8" group="2" />
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  <geom name="cube_pedestal" type="box" pos="-0.15571600000000002 -0.19441272462519205 0.16737129424058853" size="0.01 0.01 0.16737129424058853" rgba="0.4 0.4 0.5 1" contype="1" conaffinity="1" friction="1.0 0.005 0.0001" /><body name="task_cube" pos="-0.15571600000000002 -0.19441272462519205 0.34974258848117706"><freejoint name="task_cube_free" /><inertial pos="0 0 0" mass="0.03" diaginertia="0.0000045 0.0000045 0.0000045" /><geom name="task_cube_geom" type="box" size="0.015 0.015 0.015" mass="0.03" rgba="0.95 0.55 0.1 1" contype="1" conaffinity="1" friction="1.0 0.005 0.0001" condim="4" /></body></worldbody>
+  <equality>
+    <joint name="l_jaw_right_joint_mimic" joint1="l_jaw_right_joint" joint2="l_gripper_joint" polycoef="0 -0.0221801 0 0 0" solref="0.005 1" />
+    <joint name="l_jaw_left_joint_mimic" joint1="l_jaw_left_joint" joint2="l_gripper_joint" polycoef="0 0.0221801 0 0 0" solref="0.005 1" />
+    <joint name="r_jaw_right_joint_mimic" joint1="r_jaw_right_joint" joint2="r_gripper_joint" polycoef="0 -0.0221801 0 0 0" solref="0.005 1" />
+    <joint name="r_jaw_left_joint_mimic" joint1="r_jaw_left_joint" joint2="r_gripper_joint" polycoef="0 0.0221801 0 0 0" solref="0.005 1" />
+  </equality>
+  <contact>
+    <exclude body1="base_link" body2="l_hip_pitch_link" />
+    <exclude body1="base_link" body2="r_hip_pitch_link" />
+    <exclude body1="l_hip_pitch_link" body2="l_hip_roll_link" />
+    <exclude body1="l_hip_roll_link" body2="l_hip_yaw_link" />
+    <exclude body1="l_hip_yaw_link" body2="l_knee_link" />
+    <exclude body1="l_knee_link" body2="l_link4" />
+    <exclude body1="l_link4" body2="l_link5" />
+    <exclude body1="l_link5" body2="l_link6" />
+    <exclude body1="l_link6" body2="l_gripper_link" />
+    <exclude body1="l_link6" body2="l_jaw_right" />
+    <exclude body1="l_link6" body2="l_jaw_left" />
+    <exclude body1="r_hip_pitch_link" body2="r_hip_roll_link" />
+    <exclude body1="r_hip_roll_link" body2="r_hip_yaw_link" />
+    <exclude body1="r_hip_yaw_link" body2="r_knee_link" />
+    <exclude body1="r_knee_link" body2="r_link4" />
+    <exclude body1="r_link4" body2="r_link5" />
+    <exclude body1="r_link5" body2="r_link6" />
+    <exclude body1="r_link6" body2="r_gripper_link" />
+    <exclude body1="r_link6" body2="r_jaw_right" />
+    <exclude body1="r_link6" body2="r_jaw_left" />
+    <exclude body1="base_link" body2="l_hip_roll_link" />
+    <exclude body1="base_link" body2="r_hip_roll_link" />
+    <exclude body1="l_gripper_link" body2="l_jaw_left" />
+    <exclude body1="l_gripper_link" body2="l_jaw_right" />
+    <exclude body1="l_gripper_link" body2="l_link5" />
+    <exclude body1="l_hip_pitch_link" body2="l_hip_yaw_link" />
+    <exclude body1="l_hip_pitch_link" body2="r_hip_pitch_link" />
+    <exclude body1="l_hip_roll_link" body2="l_knee_link" />
+    <exclude body1="l_hip_yaw_link" body2="l_link4" />
+    <exclude body1="l_jaw_left" body2="l_jaw_right" />
+    <exclude body1="l_jaw_left" body2="l_link5" />
+    <exclude body1="l_jaw_right" body2="l_link5" />
+    <exclude body1="l_knee_link" body2="l_link5" />
+    <exclude body1="l_link4" body2="l_link6" />
+    <exclude body1="r_gripper_link" body2="r_jaw_left" />
+    <exclude body1="r_gripper_link" body2="r_jaw_right" />
+    <exclude body1="r_gripper_link" body2="r_link5" />
+    <exclude body1="r_hip_pitch_link" body2="r_hip_yaw_link" />
+    <exclude body1="r_hip_roll_link" body2="r_knee_link" />
+    <exclude body1="r_hip_yaw_link" body2="r_link4" />
+    <exclude body1="r_jaw_left" body2="r_jaw_right" />
+    <exclude body1="r_jaw_left" body2="r_link5" />
+    <exclude body1="r_jaw_right" body2="r_link5" />
+    <exclude body1="r_knee_link" body2="r_link5" />
+    <exclude body1="r_link4" body2="r_link6" />
+  </contact>
+  <keyframe>
+    <key name="home" qpos="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -0.15571600000000002 -0.19441272462519205 0.34974258848117706 1 0 0 0" />
+    <key name="ready" qpos="0.2 0 0 -1.2 0 0 0 0 0 0 0.2 0 0 -1.2 0 0 0 0 0 0 -0.15571600000000002 -0.19441272462519205 0.34974258848117706 1 0 0 0" />
+  </keyframe>
+</mujoco>
